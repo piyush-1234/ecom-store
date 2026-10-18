@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* System font stack — zero network cost, instant render (protects LCP).
+       `next/font` is deliberately avoided so builds work offline. */
+    --font-sans:
+      'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial,
+      'Noto Sans', sans-serif;
+
+    /* Brand tokens — ink / off-white / olive (Phase 0 gate).
+       HSL triplets consumed by tailwind.config.ts. */
+    --background: 45 29% 97%;
+    --foreground: 0 0% 4%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 4%;
+
+    --primary: 0 0% 4%;
+    --primary-foreground: 45 29% 97%;
+
+    --secondary: 45 29% 93%;
+    --secondary-foreground: 0 0% 4%;
+
+    --muted: 45 20% 92%;
+    --muted-foreground: 0 0% 38%;
+
+    --accent: 80 28% 34%;
+    --accent-foreground: 45 29% 97%;
+
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 45 15% 85%;
+    --input: 45 15% 85%;
+    --ring: 80 28% 34%;
+
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
+    /* Guard against a single wide child creating a horizontal scrollbar on
+       small screens (a common mobile-layout defect). */
+    overflow-x: hidden;
+  }
+
+  /* Visible focus for keyboard users only — accessibility baseline. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000" role="img" aria-label="T-shirt placeholder">
+  <rect width="800" height="1000" fill="#F4F1E8"/>
+  <g fill="none" stroke="#0B0B0B" stroke-width="6" stroke-linejoin="round" stroke-linecap="round" opacity="0.85">
+    <path d="M290 300 L200 360 L250 470 L310 440 L310 760 L490 760 L490 440 L550 470 L600 360 L510 300 Z"/>
+    <path d="M290 300 Q400 370 510 300" />
+  </g>
+  <text x="400" y="850" font-family="Helvetica, Arial, sans-serif" font-size="28" fill="#5F6F3E" text-anchor="middle" letter-spacing="4">T-SHIRT</text>
+</svg>
