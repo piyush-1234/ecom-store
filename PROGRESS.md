@@ -21,7 +21,7 @@ Phase-by-phase log. Commit-style entries. Updated at the end of every phase.
 | 6 | Returns/exchanges, refunds, admin order management | ✅ **Complete** | **206/206 unit** ✔ · **21/21 returns lifecycle** ✔ · **9/9 admin smoke** ✔ · 44/44 storefront ✔ |
 | 7 | Admin dashboard — product CRUD, inventory, coupons, analytics | ✅ **Complete** | **222/222 unit** ✔ · **14/14 admin** ✔ · **12/12 coupons** ✔ · 44/44 store · 34/34 checkout · 21/21 returns · 21/21 shipping |
 | 8 | Hardening — e2e, rate limiting, headers, load test, SEO, a11y, error tracking | ✅ **Complete** | **13/13 Playwright** ✔ · **222/222 unit** ✔ · **54/54 storefront** ✔ · load test p95 498ms / 0% errors ✔ |
-| 9 | Deploy runbook (`docs/DEPLOY.md`) — **no execution without approval** | ⬜ Not started | — |
+| 9 | Deploy runbook (`docs/DEPLOY.md`) — **no execution without approval** | ✅ **Complete** (not executed) | runbook written · `preflight.mjs` executed · `migrate status` current · **no deploy performed** |
 
 ---
 
@@ -507,5 +507,34 @@ Logged as `BLK-012`.
 - **Redis-backed rate limiting** — still per-process (`BLK-010`).
 - Automated colour-contrast / full axe audit: needs `@axe-core/playwright`; the structural
   a11y checks above cover the blocking categories only.
+
+---
+
+### `docs(phase-9): deployment runbook + executable preflight gate`
+
+**Done**
+- `docs/DEPLOY.md` — full runbook: architecture, database provisioning (pooled vs direct),
+  migration ordering rules, Vercel configuration and the complete env matrix, Razorpay /
+  Shiprocket / Resend / storage setup, DNS, post-deploy verification, rollback table,
+  monitoring, security checklist, go-live checklist, and a table of known pre-launch limits
+- `scripts/preflight.mjs` — executable launch gate. Fails on a development `AUTH_SECRET`,
+  non-HTTPS or localhost app URL, **placeholder GST identity** (invalid invoices),
+  unreachable database, an unfinished migration, `STORAGE_DRIVER=local` in production, and
+  disabled payments/email in production
+- `prisma/schema.prisma` now declares **`directUrl`** — migrations must bypass a connection
+  pooler (Neon/Supabase/pgBouncer), which is a real failure mode on serverless Postgres.
+  `DIRECT_URL` added to `.env`, `.env.example`, `docker-compose.yml` and CI.
+
+**Verified — executed**
+| Check | Result |
+|---|---|
+| `node scripts/preflight.mjs` | ✅ runs; **correctly fails** on the dev secret, and warns on placeholders + disabled integrations |
+| `node scripts/preflight.mjs --production` | ✅ **fails with 8 blocking issues** — the gate refuses to green-light an unconfigured deployment |
+| `npx prisma validate` | ✅ schema valid with `directUrl` |
+| `npx prisma migrate status` | ✅ 3 migrations, "Database schema is up to date!" |
+
+**Not executed (by design)**
+- No Vercel deploy, no DNS change, no production database created — approval gate #2.
+- `docker compose up` still never executed (Docker absent, `BLK-002`).
 
 ---

@@ -51,6 +51,7 @@ services:
     container_name: es_migrate
     environment:
       DATABASE_URL: postgresql://store:store@db:5432/store?schema=public
+      DIRECT_URL: postgresql://store:store@db:5432/store?schema=public
     command: >
       sh -c "npx prisma migrate deploy &&
              npx prisma db seed"
@@ -68,6 +69,7 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://store:store@db:5432/store?schema=public
+      DIRECT_URL: postgresql://store:store@db:5432/store?schema=public
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       AUTH_SECRET: local-dev-secret-change-me-0123456789abcdef
       GST_LEGAL_ENTITY_NAME: '[LEGAL_ENTITY_NAME]'

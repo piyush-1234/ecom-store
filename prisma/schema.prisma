@@ -17,7 +17,11 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  // Runtime connection. On pooled hosts (Neon/Supabase/pgBouncer) this is the pooled URL.
   url      = env("DATABASE_URL")
+  // Migrations must bypass the pooler (prepared statements / DDL do not play well with
+  // transaction pooling). Locally this is the same value as DATABASE_URL.
+  directUrl = env("DIRECT_URL")
 }
 
 // ---------------------------------------------------------------------------

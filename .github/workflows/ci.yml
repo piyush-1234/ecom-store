@@ -32,6 +32,9 @@ jobs:
 
       - name: Generate Prisma client
         run: npx prisma generate
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/db?schema=public
+          DIRECT_URL: postgresql://user:pass@localhost:5432/db?schema=public
 
       - name: Typecheck
         run: npm run typecheck
@@ -49,10 +52,12 @@ jobs:
         run: npx prisma validate
         env:
           DATABASE_URL: postgresql://user:pass@localhost:5432/db?schema=public
+          DIRECT_URL: postgresql://user:pass@localhost:5432/db?schema=public
 
       - name: Build
         run: npm run build
         env:
           DATABASE_URL: postgresql://user:pass@localhost:5432/db?schema=public
+          DIRECT_URL: postgresql://user:pass@localhost:5432/db?schema=public
           AUTH_SECRET: ci-secret-not-used-for-real-auth-0123456789
           NEXT_PUBLIC_APP_URL: http://localhost:3000

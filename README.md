@@ -338,9 +338,10 @@ deploy-time / CI use.
 |---|---|
 | [`docs/BRIEF.md`](./docs/BRIEF.md) | Scope, non-negotiables, stack, DoD, approval gates |
 | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | Layering, checkout flow, auth, tax, shipping, testing |
-| [`docs/DECISIONS.md`](./docs/DECISIONS.md) | 12 ADRs incl. the GST correction |
+| [`docs/DECISIONS.md`](./docs/DECISIONS.md) | 30 ADRs incl. the GST correction, coupons, returns, E2E and CSP policy |
 | [`PROGRESS.md`](./PROGRESS.md) | Phase-by-phase log |
 | [`BLOCKERS.md`](./BLOCKERS.md) | Open issues needing a human decision |
+| [`docs/DEPLOY.md`](./docs/DEPLOY.md) | Deployment runbook + `node scripts/preflight.mjs` launch gate |
 
 ---
 
@@ -357,7 +358,7 @@ deploy-time / CI use.
 | 6 | Returns/exchanges, refunds, admin orders | ✅ (gateway refund pending) |
 | 7 | Admin dashboard — product CRUD, inventory, coupons, analytics | ✅ |
 | 8 | Hardening — e2e, rate limiting, CSP, SEO, a11y, error tracking | ✅ |
-| 9 | `docs/DEPLOY.md` — **no deploy without approval** | ⬜ |
+| 9 | `docs/DEPLOY.md` — **no deploy without approval** | ✅ (written, not executed) |
 
 ---
 
