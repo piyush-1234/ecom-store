@@ -16,7 +16,7 @@ Phase-by-phase log. Commit-style entries. Updated at the end of every phase.
 | 1 | Scaffold, Docker Compose, Prisma schema + migration, seed, env template, CI | ✅ **Complete** | Prisma generate ✔ · migration SQL ✔ · tsc ✔ · 35/35 tests ✔ · `next build` ✔ · home page rendered ✔ **· migrations + seed now EXECUTED against a real Postgres (see follow-up below)** |
 | 2 | Auth (email + phone OTP), account, addresses | ✅ **Complete** | tsc ✔ · 86/86 unit tests ✔ · build 15 routes ✔ · **29/29 e2e smoke** ✔ · guard redirect 307 ✔ |
 | 3 | Storefront — catalog, PDP, variants, size chart, search, filters, cart | ✅ **Complete** | 102/102 unit ✔ · **14/14 cart integration** ✔ · **32/32 storefront smoke** ✔ · 29/29 auth regression ✔ · build 22 routes ✔ |
-| 4 | Checkout — address, pincode, Razorpay + COD, order, GST invoice PDF | ⬜ Not started | — |
+| 4 | Checkout — address, pincode, Razorpay + COD, order, GST invoice PDF | ✅ **Complete** (prepaid gated) | **146/146 unit** ✔ · **34/34 checkout integration** ✔ · **41/41 HTTP** ✔ · invoice served as real PDF ✔ |
 | 5 | Shipping — Shiprocket webhook, tracking, status sync | ⬜ Not started | — |
 | 6 | Returns/exchanges, refunds, admin order management | ⬜ Not started | — |
 | 7 | Admin dashboard — product CRUD, inventory, coupons, analytics | ⬜ Not started | — |
@@ -230,5 +230,62 @@ admin rights). Binaries ship as an optional platform package; the cluster lives 
   through a real browser: the built-in browser cannot expose CDP here and headless Chrome
   has no driver. It is covered at the action/service layer and by typecheck; true browser
   E2E lands with Playwright in Phase 8. Logged as `BLK-011`.
+
+---
+
+### `feat(phase-4): checkout, COD, Razorpay integration, GST invoice PDF`
+
+**Done**
+- `pricing.service` — order totals with **per-line, per-piece GST**; discount allocated
+  pro-rata across lines (largest-remainder, sums exactly); service GST on shipping/COD;
+  CGST+SGST vs IGST by state; `total` reconciled from components by construction
+- `checkout.service` — `placeOrder` inside a transaction: conditional stock decrement
+  (`WHERE stock >= qty`), order + items + payment created atomically, cart destroyed;
+  idempotency key makes double-submit return the same order; COD cap and pincode
+  serviceability enforced before anything is written
+- `pincode.service` — exact → prefix → default resolution, COD eligibility, ETA
+- GST invoice **PDF** (`pdfkit`) with HSN, per-line tax, CGST/SGST or IGST split, seller
+  identity and declaration; served from `/api/orders/[orderNumber]/invoice`
+- Signed invoice tokens (HMAC) so guest orders can download without an account
+- Razorpay adapter over the REST API + signature-verified `/verify` and `/webhook` routes
+- Email adapter (console by default, Resend behind `EMAIL_ENABLED`) + order confirmation
+- UI: `/checkout` (address, live pincode check, payment choice) and `/order/[orderNumber]`
+
+**Verified — executed**
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` | ✅ exit 0 |
+| `npx vitest run` | ✅ **146/146** (added 23 pricing + 21 payment/invoice-token tests) |
+| `npx tsx scripts/smoke-checkout.ts` | ✅ **34/34** against real Postgres |
+| `node scripts/smoke-store.mjs` | ✅ **41/41** HTTP (incl. 9 new checkout/payment checks) |
+| `node scripts/smoke-auth.mjs` | ✅ 29/29 |
+| `npx next build` | ✅ exit 0, 26 routes |
+| Invoice over HTTP | ✅ `200`, 2,676 bytes, `%PDF-` header; **no token → 404** |
+| Confirmation page | ✅ rendered (see `docs/screenshots/phase4-order-confirmation.png`) |
+
+The 34 checkout assertions cover the things that actually lose money:
+`oversell rejected` · `failed order rolled back, stock unchanged` · `no orphan order left
+behind` · `replay of idempotency key creates no duplicate` · `COD above cap rejected` ·
+`unserviceable pincode rejected` · `stock decremented exactly once` · `stored total equals
+its components` · invoice contains the order number, HSN, CGST/SGST and "Rs." amounts.
+
+**Bugs found and fixed while verifying**
+1. **Invoice text assertions failed** — not a PDF bug. `pdfkit` compresses content streams
+   (FlateDecode) *and* emits glyphs as hex strings split at kerning boundaries
+   (`[<54> 90 <415820494e56>] TJ` = "T" + "AX INV"). Added a `compress` option and a hex-run
+   decoder in the test, so the invoice content is genuinely asserted rather than assumed.
+2. **Checkout test used 2 × ₹2,199 jeans** and was refused by the ₹1,500 COD cap. The guard
+   was right; the test data was wrong. Rewrote it to use a cheap item for the happy path and
+   added an explicit assertion that COD above the cap is rejected.
+3. **`setCartToken` misuse surfaced again** during the cart split — the merge path now
+   mints a token when a user cart lacks one instead of writing an empty cookie.
+
+**Deliberately not built yet**
+- Coupon redemption at checkout (the model and admin exist; wiring it into `placeOrder`
+  belongs with the coupon admin in Phase 7, not half-built now).
+- Prepaid checkout is **disabled in the UI** because `RAZORPAY_ENABLED=false`: choosing it
+  returns "Online payment is not enabled yet". The integration is real but unverified
+  without test keys (`BLK-005`, approval gate #1). Signature verification is covered by
+  unit tests with a locally generated secret.
 
 ---

@@ -69,11 +69,26 @@ Source: Ministry of Finance, Lok Sabha Unstarred Q. No. 2509 (15 Dec 2025) — h
 
 ## BLK-005 · MEDIUM · OPEN — No API credentials (by design)
 
-Razorpay, Shiprocket, Resend, and object storage credentials are **not** present. Per approval gate #1, I will build against the **official test-mode shapes** with adapter stubs and `.env.example`, and will not use real keys.
+Razorpay, Shiprocket, Resend and object-storage credentials are **not** present. Per approval
+gate #1 the integrations are built against the documented request/response shapes and are
+**feature-flagged off**, rather than being faked.
 
-**Impact.** Payment capture, shipment creation, email delivery, and image upload remain **unverified end-to-end** until test keys are provided.
+**Current behaviour without keys (Phase 4)**
+- **Prepaid checkout**: the option is visible but disabled; submitting it returns
+  "Online payment is not enabled yet. Please choose cash on delivery."
+- **COD**: fully functional end to end — verified by 34 integration assertions.
+- **Email**: the console provider logs instead of sending. `EMAIL_ENABLED=true` without a
+  key throws rather than pretending a confirmation went out.
+- **Shiprocket**: not wired yet (Phase 5).
 
-**Decision needed.** Supply **test-mode** credentials when you reach Phase 4/5, or accept stubbed integrations with contract tests.
+**Verified without keys.** Payment and webhook signature verification are pure functions and
+are unit-tested with a locally generated HMAC secret, including forged signatures, wrong
+secret, wrong payment id and tampered webhook bodies. The webhook rejects unsigned payloads
+with 400 (confirmed over HTTP).
+
+**Decision needed.** Supply **test-mode** Razorpay keys (plus a Resend key, and Shiprocket
+credentials when reaching Phase 5) to complete live verification. Until then prepaid stays
+visibly disabled — I will not enable an unverified payment path.
 
 ---
 

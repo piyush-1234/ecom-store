@@ -288,3 +288,55 @@ are static, and how a cookie-backed cart can be tested.
 **Consequence.** The storefront is simple and testable, and 32 HTTP-level assertions cover
 rendering. The trade-off is that every store request is server-rendered — fine at this
 volume, worth revisiting for LCP once real photography replaces the SVG placeholders.
+
+---
+
+## ADR-021 — GST invoice: "Rs." in the PDF, "₹" in the UI; compression configurable
+
+**Context.** PDFKit's base-14 fonts use WinAnsi encoding, which has **no U+20B9 (₹)** glyph.
+Embedding a Unicode TTF would add a binary asset and a font-licensing question. Separately,
+PDFKit compresses content streams and emits glyphs as hex strings split at kerning
+boundaries, which made content assertions fail in a way that looked like a rendering bug.
+
+**Decision.**
+1. Format invoice amounts as `Rs. 1,234.00`. "Rs." is unambiguous, standard on Indian
+   invoices, and needs no font embedding. The web UI keeps `₹` via `Intl.NumberFormat`.
+2. `generateInvoicePdf(order, { compress })`. Production keeps compression on; tests render
+   uncompressed and decode the hex glyph runs to assert the actual invoice text.
+
+**Consequence.** Invoices are portable across any host (no font dependency) and their content
+is verifiable in CI. The cost is a slightly less pretty currency symbol on the PDF.
+
+---
+
+## ADR-022 — Tax-inclusive pricing; tax is derived per component, never added on top
+
+**Context.** Indian retail prices are quoted inclusive of GST. The order total must equal
+what the customer was shown, while the invoice must still break out tax correctly.
+
+**Decision.** Treat every price as tax-inclusive. Derive tax by dividing it out:
+`net = round(gross / (1 + rate/100))`. Compute it **per line, per piece** (the apparel slab
+depends on the unit price), plus **18% service GST** on shipping and the COD fee. The order
+total is then reconciled from its components, and `computeOrderTotals` asserts the
+relationship rather than assuming it.
+
+**Consequence.** The cart total, the order record and the invoice can never disagree. A
+₹2,499 and a ₹2,599 jean in the same order are correctly taxed at 5% and 18% respectively.
+
+---
+
+## ADR-023 — Razorpay over `fetch`, gated by `RAZORPAY_ENABLED`; webhook is the source of truth
+
+**Context.** The brief lists the Razorpay Node SDK. Adding it means another dependency for a
+handful of REST calls, and the browser callback is unreliable (tab closed, network drop).
+
+**Decision.**
+1. Call the documented REST API with `fetch`; verify signatures with `node:crypto`.
+2. Everything is gated on `RAZORPAY_ENABLED`. When false, prepaid checkout refuses with a
+   clear message instead of appearing to work.
+3. The **webhook** reconciles payment state, reading the raw body for signature verification
+   and returning 500 on handler failure so Razorpay retries. Unsigned webhooks get 400.
+
+**Consequence.** One fewer dependency, an explicit network surface, and no silently unverified
+payment path. Trade-off: the SDK's typing/helpers are not available (the two endpoints used
+are trivial).

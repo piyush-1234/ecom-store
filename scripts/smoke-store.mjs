@@ -101,6 +101,48 @@ async function main() {
   ok('robots points at the sitemap', /Sitemap:/i.test(robots.text));
   ok('robots disallows /account and /cart', /Disallow: \/account/.test(robots.text) && /Disallow: \/cart/.test(robots.text));
 
+  // --- checkout surface (Phase 4) ---
+  const checkout = await get('/checkout');
+  ok('checkout renders 200', checkout.status === 200, `status=${checkout.status}`);
+  ok('empty checkout shows an empty state', /Your cart is empty/.test(checkout.text));
+
+  const pinOk = await fetch(`${BASE}/api/checkout/pincode?pincode=411001`);
+  const pinOkBody = await pinOk.json();
+  ok('pincode API accepts a metro PIN', pinOk.status === 200 && pinOkBody?.data?.serviceable === true);
+
+  const pinBad = await fetch(`${BASE}/api/checkout/pincode?pincode=744101`);
+  const pinBadBody = await pinBad.json();
+  ok('pincode API reports a blocked PIN', pinBad.status === 200 && pinBadBody?.data?.serviceable === false);
+
+  const pinInvalid = await fetch(`${BASE}/api/checkout/pincode?pincode=0123`);
+  ok('pincode API rejects a malformed PIN with 422', pinInvalid.status === 422, `status=${pinInvalid.status}`);
+
+  const invoiceMissing = await get('/api/orders/ES-DOES-NOT-EXIST/invoice');
+  ok('invoice for an unknown order 404s', invoiceMissing.status === 404, `status=${invoiceMissing.status}`);
+
+  const orderMissing = await get('/order/ES-DOES-NOT-EXIST');
+  ok('confirmation page for an unknown order 404s', orderMissing.status === 404, `status=${orderMissing.status}`);
+
+  const badSignature = await fetch(`${BASE}/api/payments/razorpay/verify`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      orderNumber: 'ES-FAKE',
+      razorpayOrderId: 'order_x',
+      razorpayPaymentId: 'pay_x',
+      // Well-formed length so schema validation passes and the HMAC check runs.
+      signature: 'a'.repeat(64),
+    }),
+  });
+  ok('invalid payment signature is refused', badSignature.status === 400, `status=${badSignature.status}`);
+
+  const unsignedWebhook = await fetch(`${BASE}/api/payments/razorpay/webhook`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ event: 'payment.captured' }),
+  });
+  ok('unsigned razorpay webhook is refused', unsignedWebhook.status === 400, `status=${unsignedWebhook.status}`);
+
   // --- 404 behaviour ---
   const badCategory = await get('/shoes');
   ok('unknown category 404s', badCategory.status === 404, `status=${badCategory.status}`);

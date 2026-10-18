@@ -34,6 +34,9 @@ public/uploads/
 *.db
 *.db-journal
 
+# local scratch (demo order state, ad-hoc artefacts)
+.cache/
+
 # typescript incremental build info
 *.tsbuildinfo
 

@@ -316,7 +316,7 @@ deploy-time / CI use.
 | 1 | Scaffold · schema · migration · seed · Docker · CI | ✅ |
 | 2 | Auth (email + phone OTP), account, addresses | ✅ |
 | 3 | Storefront — catalogue, PDP, variants, size chart, search, filters, cart | ✅ |
-| 4 | Checkout — pincode, Razorpay + COD, order, GST invoice PDF | ⬜ |
+| 4 | Checkout — pincode, Razorpay + COD, order, GST invoice PDF | ✅ (prepaid gated) |
 | 5 | Shipping — Shiprocket webhook, tracking, status sync | ⬜ |
 | 6 | Returns/exchanges, refunds, admin orders | ⬜ |
 | 7 | Admin dashboard — product CRUD, inventory, coupons, analytics | ⬜ |
