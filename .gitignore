@@ -36,6 +36,7 @@ public/uploads/
 
 # local scratch (demo order state, ad-hoc artefacts)
 .cache/
+.lighthouse/
 
 # typescript incremental build info
 *.tsbuildinfo

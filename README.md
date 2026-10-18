@@ -275,6 +275,29 @@ node scripts/load-test.mjs http://127.0.0.1:3400 10 20   # 10s, 20 concurrent
 
 Reports p50/p95/p99 and fails if p95 exceeds 1500 ms or the error rate exceeds 1%.
 
+### Lighthouse (Definition of Done gate)
+
+```bash
+export CHROME_PATH="<workspace>/.cache/ms-playwright/chromium-*/chrome-win64/chrome.exe"
+export TEMP="$PWD/.cache/tmp"     # chrome-launcher writes its log here
+mkdir -p .lighthouse
+
+for page in "/" "/t-shirts" "/product/<slug>"; do
+  npx lighthouse "http://127.0.0.1:3400${page}" \
+    --output=json --output-path="./.lighthouse/$(echo $page | tr '/' '_').json" \
+    --only-categories=performance,accessibility,best-practices,seo \
+    --form-factor=mobile --screenEmulation.mobile=true \
+    --throttling-method=simulate --quiet \
+    --chrome-flags="--headless=new --no-sandbox --disable-gpu"
+done
+
+npm run lighthouse:report      # table + pass/fail against Perf 85 / A11y 90 / BP 90 / SEO 95
+```
+
+> **Measurement gotcha:** do not pass a reusable `--user-data-dir`. A stale profile produced
+> a bogus 32 s total-blocking-time on a page that measures at 198 ms in a clean run. Run each
+> audit in isolation, with no other browser work happening.
+
 ### Service and integration suites (need the database)
 
 ```bash

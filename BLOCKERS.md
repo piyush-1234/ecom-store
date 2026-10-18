@@ -22,15 +22,26 @@ Also denied writing to `D:\` root. This is an **OS-level ACL/permission** denial
 
 ---
 
-## BLK-002 · MEDIUM · OPEN — Docker is not installed
+## BLK-002 · MEDIUM · OPEN — Docker is not installed (last unmet DoD item)
 
 **Symptom.** `Get-Command docker` returns nothing; `docker compose version` produces no output.
 
-**Impact.** The DoD requires "`docker compose up` → seeded store runs locally". I can **write** `Dockerfile` + `docker-compose.yml`, but I **cannot execute or verify** them here. I will not claim they work.
+**Impact.** The DoD requires "`docker compose up` → seeded store runs locally". I can **write**
+`Dockerfile` + `docker-compose.yml`, but I **cannot execute or verify** them here. I will not
+claim they work.
 
-**What I did instead.** Providing a verified no-Docker path via `scripts/dev-db.ts` (embedded Postgres) so migrations + seed can actually be run and proven.
+**Status of the rest of the DoD:** everything else is now verified with evidence — the
+critical purchase journey (Playwright, including the GST invoice PDF), the seeded store, the
+admin flows, and **Lighthouse (Perf 90/97/93 · A11y 98–100 · BP 96 · SEO 100)**. Docker is the
+single remaining gap.
 
-**Decision needed.** Install Docker Desktop (requires your action; I will not install globally without approval — gate #4), or accept the embedded-Postgres dev path and treat Compose as deploy-time-only.
+**What I did instead.** A verified no-Docker path: `npm run dev:db` (embedded PostgreSQL 18,
+UTF-8) → `npx prisma migrate deploy` → `npm run db:seed` → `npm run dev`. Migrations, seed
+idempotency and the full test suite have all been executed against it.
+
+**Decision needed.** Install Docker Desktop (your action; I will not install globally without
+approval — gate #4) so Compose can be verified, or accept the embedded-Postgres path and treat
+Compose as deploy-time-only.
 
 ---
 

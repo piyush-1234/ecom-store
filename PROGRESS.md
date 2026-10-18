@@ -538,3 +538,45 @@ Logged as `BLK-012`.
 - `docker compose up` still never executed (Docker absent, `BLK-002`).
 
 ---
+
+### `test(dod): Definition-of-Done verification — Lighthouse measured, test data cleaned`
+
+The DoD asks for Lighthouse scores. Those had never been measured, so they were not claimed.
+Now measured with real Chrome (mobile emulation, simulated throttling) on three
+representative pages:
+
+| Page | Performance | Accessibility | Best Practices | SEO | LCP | CLS | TBT |
+|---|---|---|---|---|---|---|---|
+| `/` | **90** | **100** | **96** | **100** | 1.67 s | 0.000 | 411 ms |
+| `/t-shirts` | **97** | **98** | **96** | **100** | 1.64 s | 0.000 | 198 ms |
+| `/product/essential-crew-tee-04` | **93** | **100** | **96** | **100** | 1.64 s | 0.000 | 301 ms |
+
+**DoD thresholds:** Performance ≥ 85 · Accessibility ≥ 90 · Best Practices ≥ 90 · SEO ≥ 95 —
+**all met on all three pages.**
+
+**A measurement trap worth recording.** The first run reported `/t-shirts` at Performance 36
+with a **32,884 ms** total-blocking-time. That is not a plausible React cost for a 12-product
+grid; it was caused by reusing a `--user-data-dir` between audits. Re-run with an isolated
+profile per audit, the same page measures 198 ms TBT. Had I reported the first number I would
+have "found" a performance disaster that does not exist — and had I quietly ignored it, I
+would have shipped without evidence. The report script and the README both document this.
+
+**Added**
+- `scripts/lighthouse-report.mjs` — summarises every report in `.lighthouse/`, prints the
+  metric table, and **exits non-zero** when a category falls under the DoD threshold
+- `scripts/cleanup-test-data.mjs` — deletes test orders/users created by the smoke and E2E
+  suites and **restores the stock those orders held** (dry-run by default, `--yes` to apply)
+- npm scripts: `lighthouse:report`, `cleanup:test`, `preflight`
+
+**Verified**
+| Check | Result |
+|---|---|
+| `node scripts/lighthouse-report.mjs` | ✅ PASS — every category on every page meets the DoD |
+| `node scripts/cleanup-test-data.mjs` | ✅ removed 4 test orders + 12 test users, restored 4 units |
+| database after cleanup | ✅ 40 products · 480 variants · **0 orders · 0 users** |
+
+**Still unmet in the DoD:** `docker compose up` cannot be verified here (Docker is not
+installed — `BLK-002`). The equivalent zero-manual-step path (`npm run dev:db` → migrate →
+seed → run) *is* verified.
+
+---
