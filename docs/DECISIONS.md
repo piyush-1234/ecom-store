@@ -369,3 +369,49 @@ captures COD money that was never collected), and regressing a delivered order b
 **Consequence.** The lifecycle test proves RTO restocks once and late events are inert. The
 cost is one extra nullable column and a slightly longer mapping function — cheap insurance
 for inventory and payment correctness.
+
+---
+
+## ADR-025 — Admin sessions are a separate token, and the guard lives in a route group
+
+**Context.** Admin pages sit under `/admin`, but `/admin/login` must be reachable without a
+session. A guard in `app/admin/layout.tsx` would redirect the login page to itself forever.
+Separately, reusing the customer session for admin would mean a customer token grants staff
+access if the role check were ever forgotten.
+
+**Decisions.**
+
+1. **Separate cookie (`es_admin`), separate issuer and audience.** Both are signed with the
+   same secret, but a customer JWT fails admin verification on `aud`, and vice versa. The
+   type system also distinguishes `SessionPayload` from `AdminPayload`.
+2. **Guard in `app/admin/(protected)/layout.tsx`.** The route group keeps `/admin/login`
+   outside the guard without a second URL segment.
+3. **Short TTL (12h) and `sameSite: 'strict'`** for admin, versus 30 days / `lax` for
+   customers.
+4. **Every server action re-checks the session** (`requireAdmin`). A form post carries no
+   authority; the layout guard only protects rendering.
+
+**Consequence.** There is no code path where a customer session reaches an admin action. The
+cost is a second session module and a route group, both small.
+
+---
+
+## ADR-026 — Return stock semantics: reserve on approve, restock on receipt, release on cancel
+
+**Context.** Exchanges move inventory in two directions and it is easy to get wrong: reserve
+too early and you hold stock for requests that may be rejected; restock too early and you
+count goods you have not received.
+
+**Decision.**
+
+- An **exchange reserves the replacement at approval** (conditional decrement, fails if the
+  size sold out since the request).
+- The **returned item is restocked only when the parcel is marked RECEIVED**.
+- **Cancelling** an approved exchange **releases** the reservation (increment).
+- Refund requests never touch replacement stock; they restock the returned item on receipt.
+- Refund amount is computed from the stored line total (which already carries its discount
+  share), pro-rata by quantity, and **excludes shipping and COD fees** by policy.
+
+**Consequence.** Inventory always reflects physical reality: reserved units are not sellable,
+received units are. The lifecycle test asserts each transition, including that approval does
+*not* restock and cancellation *does* release.

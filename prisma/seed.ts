@@ -433,6 +433,37 @@ async function seedPincodeRules() {
   return rules.length;
 }
 
+async function seedAdminUser() {
+  // Refuse to create a known-password admin in production unless one is supplied.
+  const isProduction = process.env.NODE_ENV === 'production';
+  const password = process.env.ADMIN_SEED_PASSWORD;
+  const email = (process.env.ADMIN_SEED_EMAIL ?? 'admin@ecomerce-store.local').toLowerCase();
+
+  if (isProduction && !password) {
+    console.log('  Admin        : skipped (set ADMIN_SEED_PASSWORD to create one)');
+    return 0;
+  }
+
+  const bcrypt = await import('bcryptjs');
+  const passwordHash = await bcrypt.hash(password ?? 'admin-dev-password-1', 12);
+
+  await prisma.adminUser.upsert({
+    where: { email },
+    // Never overwrite an existing admin's password on reseed.
+    update: { name: 'Store Admin', isActive: true },
+    create: {
+      email,
+      name: 'Store Admin',
+      passwordHash,
+      role: 'ADMIN',
+      isActive: true,
+    },
+  });
+
+  console.log(`  Admin        : ${email} (${password ? 'env password' : 'development default'})`);
+  return 1;
+}
+
 async function main() {
   console.log('Seeding ecomerce-store…');
 
@@ -456,6 +487,7 @@ async function main() {
 
   const couponCount = await seedCoupons();
   const pincodeCount = await seedPincodeRules();
+  await seedAdminUser();
 
   const [productTotal, variantTotal, inStock] = await Promise.all([
     prisma.product.count(),

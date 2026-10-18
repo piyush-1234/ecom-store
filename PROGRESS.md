@@ -18,7 +18,7 @@ Phase-by-phase log. Commit-style entries. Updated at the end of every phase.
 | 3 | Storefront — catalog, PDP, variants, size chart, search, filters, cart | ✅ **Complete** | 102/102 unit ✔ · **14/14 cart integration** ✔ · **32/32 storefront smoke** ✔ · 29/29 auth regression ✔ · build 22 routes ✔ |
 | 4 | Checkout — address, pincode, Razorpay + COD, order, GST invoice PDF | ✅ **Complete** (prepaid gated) | **146/146 unit** ✔ · **34/34 checkout integration** ✔ · **41/41 HTTP** ✔ · invoice served as real PDF ✔ |
 | 5 | Shipping — Shiprocket webhook, tracking, status sync | ✅ **Complete** (adapter gated) | **178/178 unit** ✔ · **21/21 shipping lifecycle** ✔ · **44/44 HTTP** ✔ · tracking UI verified visually ✔ |
-| 6 | Returns/exchanges, refunds, admin order management | ⬜ Not started | — |
+| 6 | Returns/exchanges, refunds, admin order management | ✅ **Complete** | **206/206 unit** ✔ · **21/21 returns lifecycle** ✔ · **9/9 admin smoke** ✔ · 44/44 storefront ✔ |
 | 7 | Admin dashboard — product CRUD, inventory, coupons, analytics | ⬜ Not started | — |
 | 8 | Hardening — tests, rate limiting, headers, SEO, a11y, error tracking | ⬜ Not started | — |
 | 9 | Deploy runbook (`docs/DEPLOY.md`) — **no execution without approval** | ⬜ Not started | — |
@@ -339,5 +339,62 @@ guessed at.
 - The webhook payload is parsed defensively (`current_status` ?? `shipment_status`, awb or
   awb_code, shipment_id or order_id), but real payload field names could differ; a single
   captured sample payload would settle it.
+
+---
+
+### `feat(phase-6): returns & exchanges, refunds, admin order management`
+
+**Done**
+- `returns.rules` — eligibility (delivered-only, 7-day refund / 15-day exchange windows,
+  quantity accounting, one open request per item, exchange stock check) and refund maths,
+  as pure functions
+- `returns.service` — request creation with authorisation-independent validation, plus admin
+  transitions: approve / reject / cancel / receive / ship replacement / refund / complete
+- **Stock semantics:** an exchange *reserves* the replacement at approval, the returned item
+  is restocked at *receipt*, and cancelling an approved exchange *releases* the reservation.
+  Every movement is a conditional update.
+- Admin authentication: separate admin cookie, issuer and audience from customer sessions,
+  short-lived (12h), role-aware guard
+- Admin UI: orders list with filters + stats, order detail with items/payment/shipment and
+  pack/cancel actions, returns queue with status-specific actions
+- Customer UI: return/exchange request form on the order page (exchange presented first,
+  since it keeps the sale), plus request history
+- Admin seeding (refuses a default password in production), audit log rows on every admin
+  transition
+
+**Verified — executed**
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` | ✅ exit 0 |
+| `npx vitest run` | ✅ **206/206** (added 28 returns-rule tests) |
+| `npx tsx scripts/smoke-returns.ts` | ✅ **21/21** against real Postgres |
+| `node scripts/smoke-admin.mjs` | ✅ **9/9** (guard, bad creds, no enumeration, session) |
+| `node scripts/smoke-store.mjs` | ✅ 44/44 |
+| `node scripts/smoke-auth.mjs` | ✅ 29/29 |
+| `npx tsx scripts/smoke-shipping.ts` | ✅ 21/21 |
+| `npx tsx scripts/smoke-checkout.ts` | ✅ 34/34 |
+| `npx next build` | ✅ exit 0 |
+| Order page + returns | ✅ rendered (`docs/screenshots/phase6-order-returns.png`) |
+
+**Bugs and traps found**
+1. **A stale server nearly produced a false verification.** The Phase 5 process still held
+   port 3000, so the first Phase 6 HTTP run silently hit the *old* build (`EADDRINUSE` was
+   swallowed by the background job). Caught by reading the job output and probing the port;
+   all HTTP suites were re-run against a confirmed Phase 6 build.
+2. **COD banner on a delivered order.** The page told a customer to "keep ₹1,196 ready" on an
+   order already marked DELIVERED. Now suppressed for terminal statuses. Caught by looking at
+   the screenshot, not by a test.
+3. **Copy contradicted policy.** Footer and order page said "free size exchange within 7
+   days" while the implemented exchange window is 15 days. Unified to 15 (refund window
+   stays 7).
+4. **`smoke-admin` crashed reading a Response body twice** — `res.json()` then `res.text()`.
+   Now reads the body once.
+
+**Deliberately not done**
+- **Gateway refunds.** `completeRefund` records the refund amount against the payment and
+  marks it `PARTIALLY_REFUNDED`, but does **not** call the Razorpay refund API — that needs
+  test keys (`BLK-005`). Until then, refunds are an ops action reconciled manually.
+  Called out explicitly rather than implied.
+- Coupons, product CRUD and analytics remain Phase 7.
 
 ---

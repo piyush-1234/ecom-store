@@ -37,7 +37,7 @@ export function SiteFooter() {
         <div>
           <h2 className="text-sm font-semibold">Policies</h2>
           <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-            <li>Free size exchange within 7 days</li>
+            <li>Free size exchange within 15 days</li>
             <li>All prices include GST</li>
             <li>Made in India</li>
           </ul>

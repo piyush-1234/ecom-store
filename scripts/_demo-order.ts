@@ -60,11 +60,14 @@ async function create(): Promise<void> {
     qty,
   };
 
-  // Give the demo order a shipment, mid-transit, so the tracking timeline renders.
+  // Give the demo order a shipment and drive it to delivered, so both the tracking
+  // timeline and the return/exchange affordance are visible.
   const awb = `DEMO${randomBytes(4).toString('hex').toUpperCase()}`;
   await createShipmentRecord(order.id, { awb, courierName: 'Delhivery Surface' });
   await applyShipmentEvent({ awb, rawStatus: 'PICKUP SCHEDULED' });
   await applyShipmentEvent({ awb, rawStatus: 'IN TRANSIT' });
+  await applyShipmentEvent({ awb, rawStatus: 'OUT FOR DELIVERY' });
+  await applyShipmentEvent({ awb, rawStatus: 'DELIVERED' });
 
   mkdirSync('.cache', { recursive: true });
   writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));

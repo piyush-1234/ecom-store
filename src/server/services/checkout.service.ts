@@ -320,6 +320,7 @@ export interface OrderSummary {
   taxPaise: number;
   email: string;
   items: {
+    id: string;
     productName: string;
     variantLabel: string;
     qty: number;
@@ -348,6 +349,7 @@ export async function getOrderSummary(orderNumberValue: string): Promise<OrderSu
     taxPaise: order.taxPaise,
     email: order.email,
     items: order.items.map((item) => ({
+      id: item.id,
       productName: item.productName,
       variantLabel: item.variantLabel,
       qty: item.qty,

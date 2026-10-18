@@ -318,7 +318,7 @@ deploy-time / CI use.
 | 3 | Storefront — catalogue, PDP, variants, size chart, search, filters, cart | ✅ |
 | 4 | Checkout — pincode, Razorpay + COD, order, GST invoice PDF | ✅ (prepaid gated) |
 | 5 | Shipping — Shiprocket webhook, tracking, status sync | ✅ (adapter gated) |
-| 6 | Returns/exchanges, refunds, admin orders | ⬜ |
+| 6 | Returns/exchanges, refunds, admin orders | ✅ (gateway refund pending) |
 | 7 | Admin dashboard — product CRUD, inventory, coupons, analytics | ⬜ |
 | 8 | Hardening — e2e, rate limiting, CSP, SEO, a11y, error tracking | ⬜ |
 | 9 | `docs/DEPLOY.md` — **no deploy without approval** | ⬜ |
