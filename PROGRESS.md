@@ -15,7 +15,7 @@ Phase-by-phase log. Commit-style entries. Updated at the end of every phase.
 | 0 | Brief, architecture, decisions, progress, blockers | ✅ **Complete** | Files written; decisions recorded |
 | 1 | Scaffold, Docker Compose, Prisma schema + migration, seed, env template, CI | ✅ **Complete** | Prisma generate ✔ · migration SQL ✔ · tsc ✔ · 35/35 tests ✔ · `next build` ✔ · home page rendered ✔ **· migrations + seed now EXECUTED against a real Postgres (see follow-up below)** |
 | 2 | Auth (email + phone OTP), account, addresses | ✅ **Complete** | tsc ✔ · 86/86 unit tests ✔ · build 15 routes ✔ · **29/29 e2e smoke** ✔ · guard redirect 307 ✔ |
-| 3 | Storefront — catalog, PDP, variants, size chart, search, filters, cart | ⬜ Not started | — |
+| 3 | Storefront — catalog, PDP, variants, size chart, search, filters, cart | ✅ **Complete** | 102/102 unit ✔ · **14/14 cart integration** ✔ · **32/32 storefront smoke** ✔ · 29/29 auth regression ✔ · build 22 routes ✔ |
 | 4 | Checkout — address, pincode, Razorpay + COD, order, GST invoice PDF | ⬜ Not started | — |
 | 5 | Shipping — Shiprocket webhook, tracking, status sync | ⬜ Not started | — |
 | 6 | Returns/exchanges, refunds, admin order management | ⬜ Not started | — |
@@ -175,5 +175,60 @@ admin rights). Binaries ship as an optional platform package; the cluster lives 
   (approval gate #1). Sending fails loudly rather than pretending.
 - Email verification and password reset were **not** in the brief's Phase 2 scope; noted
   as a gap for Phase 8 (security hardening).
+
+---
+
+### `feat(phase-3): storefront — catalogue, PDP, filters, search, size chart, cart`
+
+**Done**
+- `catalog.service` — categories, paginated product listing, facets derived from data,
+  PDP lookup, featured/related products, sitemap slugs
+- Routes: `/` (merchandised home), `/[category]` (`t-shirts`, `jeans` — anything else
+  404s), `/product/[slug]`, `/cart`, `/search`, `/size-chart`, plus `sitemap.xml`
+  and `robots.txt`
+- Filters (`size`, `colour`, `fit`, `price`, `sort`, `page`) implemented as **plain
+  links**: shareable, crawlable, and working with JavaScript disabled
+- PDP: gallery, colour swatches, size grid with per-size stock, add-to-cart server action,
+  spec table (fabric/GSM/fit/**HSN**/country of origin), care notes, related products,
+  and `Product` JSON-LD with `hasMerchantReturnPolicy` + `shippingDetails`
+- Cart: guest cart identified by a 256-bit httpOnly token; quantities clamped to stock;
+  `/cart` line management via server actions
+- `robots.txt` disallows account/cart/checkout/search; sitemap is DB-driven with a
+  static fallback so a cold database cannot break a deploy
+
+**Architecture decisions made during the phase**
+- Split `cart.service` into `cart-core.service` (pure, no `next/headers`, DB-testable) and
+  `cart.service` (cookie-aware wrapper). Without this split the cart could only be tested
+  through HTTP.
+- The store header reads the cart count and session server-side, so store routes render
+  dynamically. Accepted: a per-user header that is correct on first paint beats a static
+  header that flickers.
+
+**Verified — executed**
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` | ✅ exit 0 |
+| `npx vitest run` | ✅ **102/102** (added 16 catalogue-filter tests) |
+| `npx next build` | ✅ exit 0, 22 routes, shared JS 87.3 kB |
+| `npx tsx scripts/smoke-cart.ts` | ✅ **14/14** against real Postgres (add, merge, clamp, update, remove, out-of-stock, unknown variant, cart isolation) |
+| `node scripts/smoke-store.mjs` | ✅ **32/32** (home, both listings, PDP, JSON-LD INR + return policy, filters, garbage filters, search, empty search, size chart, cart, sitemap, robots, 404s) |
+| `node scripts/smoke-auth.mjs` | ✅ 29/29 (Phase 2 regression) |
+| Visual | ✅ home / listing / PDP / size chart captured in `docs/screenshots/` |
+
+**Bugs found and fixed while verifying**
+1. **PDP defaulted to size XS** — it preselected simply the first in-stock variant. Now
+   picks by a size-curve preference (M → L → XL → S → XXL → XS). Caught by looking at the
+   screenshot, not by a test.
+2. **`setCartToken` called twice** in the guest-cart merge path (one call with an empty
+   string). Removed, and the surviving cart now mints a token if it lacks one.
+3. **£ vs ₹ scare** — the price glyph looked like a pound sign at low resolution. Verified
+   programmatically that `Intl.NumberFormat` emits **U+20B9 (₹)** and that the served HTML
+   contains no U+00A3. It was a preview artifact.
+
+**Not verified**
+- The **add-to-cart click path** (form → server action → redirect) is not exercised
+  through a real browser: the built-in browser cannot expose CDP here and headless Chrome
+  has no driver. It is covered at the action/service layer and by typecheck; true browser
+  E2E lands with Playwright in Phase 8. Logged as `BLK-011`.
 
 ---

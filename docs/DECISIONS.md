@@ -260,3 +260,31 @@ every request.
 input) without mocking Next internals, and an expired/forged token can never render account
 content. Cost: the auth check runs per-request in the layout rather than once in middleware —
 acceptable at this scale, and it is the correct trade for actually validating the token.
+
+---
+
+## ADR-020 — Storefront rendering: URL-driven filters, dynamic pages, split cart
+
+**Context.** Phase 3 needed several coupled choices: how filters work, whether store pages
+are static, and how a cookie-backed cart can be tested.
+
+**Decisions.**
+
+1. **Filters are plain `<Link>`s, not a client widget.** Every filter/sort/page state is a
+   URL. Benefits: shareable, crawlable, cacheable, works without JS, and the grid is
+   server-rendered. Cost: no instant in-page toggle — acceptable for apparel browsing.
+2. **Store pages render dynamically.** The header shows the cart count and the
+   sign-in/account state, which are per-user. Reading them server-side means the header is
+   correct on first paint. Alternative (static shell + client fetch) was rejected because it
+   flickers and adds a request per page view.
+3. **Cart is split into `cart-core.service` and `cart.service`.** The core takes an explicit
+   cart token and imports no `next/headers`, so it can be driven directly by an integration
+   test against Postgres. The wrapper resolves the token from the cookie and delegates.
+   This was not cosmetic: before the split, the cart could only be tested through HTTP.
+4. **Product/category pages are not statically generated yet.** No `generateStaticParams`,
+   because prices/stock must be fresh and the catalogue is small (40 products). Revisit when
+   the catalogue grows or when ISR with on-demand revalidation is wired.
+
+**Consequence.** The storefront is simple and testable, and 32 HTTP-level assertions cover
+rendering. The trade-off is that every store request is server-rendered — fine at this
+volume, worth revisiting for LCP once real photography replaces the SVG placeholders.

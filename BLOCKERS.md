@@ -99,6 +99,30 @@ needs a managed Postgres (Neon/Supabase) — that is a deployment decision, not 
 
 ---
 
+## BLK-011 · MEDIUM · OPEN — No browser automation, so UI interactions are verified below the click layer
+
+**Context.** Phase 3 adds an add-to-cart flow implemented as a React Server Action bound to
+a form. The built-in browser cannot expose CDP in this environment (`chrome did not expose
+CDP within 30s`), and headless Chrome is only usable for screenshots — there is no driver
+to click a button and observe the result.
+
+**Impact.** The following are verified:
+- pages render with real data (32-assertion HTTP smoke)
+- cart DB operations (14-assertion integration test against Postgres)
+- types, build, and that the action is correctly bound in the rendered HTML
+
+The following is **not** verified: actually clicking "Add to cart" in a browser and landing
+on `/cart` with the item present. That gap is real but narrow — the action delegates to the
+integration-tested cart core.
+
+**What I did instead.** Split the cart into `cart-core.service` (pure, DB-testable) and a
+thin cookie-aware wrapper so the business logic is exercised directly rather than assumed.
+
+**Decision needed.** None now. Playwright in Phase 8 provides true browser E2E; if you want
+it sooner, that phase can be pulled forward.
+
+---
+
 ## BLK-010 · MEDIUM · OPEN — Rate limiting is in-process and trusts `x-forwarded-for`
 
 **Context.** `src/server/http.ts` implements a fixed-window limiter held in a module-level
