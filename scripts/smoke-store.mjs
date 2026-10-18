@@ -143,6 +143,35 @@ async function main() {
   });
   ok('unsigned razorpay webhook is refused', unsignedWebhook.status === 400, `status=${unsignedWebhook.status}`);
 
+  // --- shipping webhook (Phase 5) ---
+  const shipToken = process.env.SHIPROCKET_WEBHOOK_TOKEN ?? 'dev-webhook-token-123';
+
+  const shipNoToken = await fetch(`${BASE}/api/shipping/shiprocket/webhook`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ awb: 'X', current_status: 'DELIVERED' }),
+  });
+  ok('shiprocket webhook rejects a missing token', shipNoToken.status === 401, `status=${shipNoToken.status}`);
+
+  const shipWrongToken = await fetch(`${BASE}/api/shipping/shiprocket/webhook`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': 'definitely-wrong' },
+    body: JSON.stringify({ awb: 'X', current_status: 'DELIVERED' }),
+  });
+  ok('shiprocket webhook rejects a wrong token', shipWrongToken.status === 401, `status=${shipWrongToken.status}`);
+
+  const shipUnknownAwb = await fetch(`${BASE}/api/shipping/shiprocket/webhook`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': shipToken },
+    body: JSON.stringify({ awb: 'NOT-A-REAL-AWB', current_status: 'DELIVERED' }),
+  });
+  const shipUnknownBody = await shipUnknownAwb.json();
+  ok(
+    'authenticated webhook with an unknown AWB is accepted but ignored',
+    shipUnknownAwb.status === 200 && shipUnknownBody?.handled === false,
+    `status=${shipUnknownAwb.status} handled=${shipUnknownBody?.handled}`,
+  );
+
   // --- 404 behaviour ---
   const badCategory = await get('/shoes');
   ok('unknown category 404s', badCategory.status === 404, `status=${badCategory.status}`);

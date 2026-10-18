@@ -470,6 +470,8 @@ model Shipment {
   shippedAt    DateTime?
   deliveredAt  DateTime?
   lastSyncedAt DateTime?
+  /// Set once, when a terminal state returns the goods to stock. Guards double restock.
+  restockedAt  DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

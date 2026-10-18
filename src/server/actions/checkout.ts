@@ -106,5 +106,18 @@ export async function placeOrderAction(
     console.error('[checkout] confirmation email failed', error);
   }
 
+  // Best effort: create the shipment now for COD orders. Non-fatal by design.
+  if (input.paymentMethod === 'COD') {
+    try {
+      const { maybeCreateShipmentForOrder } = await import('@/server/services/shipping.service');
+      const result = await maybeCreateShipmentForOrder(placed.id);
+      if (!result.created) {
+        console.log(`[checkout] shipment not created for ${placed.orderNumber}: ${result.reason}`);
+      }
+    } catch (error) {
+      console.error('[checkout] shipment creation threw', error);
+    }
+  }
+
   redirect(`/order/${placed.orderNumber}?token=${placed.invoiceToken}`);
 }

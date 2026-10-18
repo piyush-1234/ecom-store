@@ -340,3 +340,32 @@ handful of REST calls, and the browser callback is unreliable (tab closed, netwo
 **Consequence.** One fewer dependency, an explicit network surface, and no silently unverified
 payment path. Trade-off: the SDK's typing/helpers are not available (the two endpoints used
 are trivial).
+
+---
+
+## ADR-024 — Shipping webhooks are authenticated, never trusted; order state is forward-only
+
+**Context.** Courier webhooks arrive out of order, retry, and are the primary source of
+delivery truth. Two failure modes are severe: marking a failed delivery as delivered (which
+captures COD money that was never collected), and regressing a delivered order back to
+"shipped" because a stale event arrived late.
+
+**Decisions.**
+
+1. **Auth is a shared token**, because Shiprocket authenticates its webhook with the
+   configured token in `x-api-key` — it is *not* an HMAC over the body. The token is compared
+   in constant time, the route returns **503 when no token is configured** (refusing rather
+   than accepting unauthenticated), and the body is treated purely as a pointer to the
+   shipment. Every state change is derived server-side.
+2. **Order progression is forward-only** (`shouldAdvanceOrder`), with cancellation able to
+   win and cancelled/refunded orders never resurrected.
+3. **Restocking is guarded by a column**, `Shipment.restockedAt`, rather than inferred from
+   the previous status. A replayed `RTO DELIVERED` therefore cannot double-increment stock —
+   a bug that silently inflates inventory and is very hard to trace later.
+4. **Exceptions are matched before positives.** `"UNDELIVERED".includes("DELIVERED")` is true;
+   without explicit ordering a failed delivery becomes a delivered order. A unit test pins
+   this.
+
+**Consequence.** The lifecycle test proves RTO restocks once and late events are inert. The
+cost is one extra nullable column and a slightly longer mapping function — cheap insurance
+for inventory and payment correctness.

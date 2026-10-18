@@ -4,9 +4,29 @@ import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { getOrderSummary } from '@/server/services/checkout.service';
 import { getOrderForInvoice } from '@/server/services/checkout.service';
+import { getTrackingForOrder } from '@/server/services/shipping.service';
 import { verifyInvoiceToken, invoicePath } from '@/server/invoice/token';
 import { getCurrentSession } from '@/server/auth/session-cookie';
 import { formatINR } from '@/lib/utils/money';
+
+const TRACKING_STEPS = ['Confirmed', 'Shipped', 'Out for delivery', 'Delivered'] as const;
+
+/** Index of the last completed step, or -1 for states outside the happy path. */
+function trackingStepIndex(status: string): number {
+  switch (status) {
+    case 'PENDING':
+      return 0;
+    case 'PICKED_UP':
+    case 'IN_TRANSIT':
+      return 1;
+    case 'OUT_FOR_DELIVERY':
+      return 2;
+    case 'DELIVERED':
+      return 3;
+    default:
+      return -1;
+  }
+}
 
 export const metadata: Metadata = {
   title: 'Order confirmation',
@@ -40,6 +60,8 @@ export default async function OrderPage({ params, searchParams }: PageProps) {
 
   const summary = await getOrderSummary(orderNumber);
   if (!summary) notFound();
+
+  const tracking = await getTrackingForOrder(orderNumber);
 
   const invoiceLink = tokenValid ? invoicePath(orderNumber) : null;
 
@@ -116,6 +138,67 @@ export default async function OrderPage({ params, searchParams }: PageProps) {
           <p className="mt-4 rounded-md bg-secondary px-4 py-3 text-sm">
             Please keep {formatINR(summary.totalPaise)} ready to pay the courier on delivery.
           </p>
+        ) : null}
+
+        {tracking ? (
+          <section className="mt-6 rounded-lg border border-border bg-card p-4" aria-labelledby="tracking-heading">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 id="tracking-heading" className="text-sm font-semibold">
+                Delivery
+              </h2>
+              {tracking.awb ? (
+                <p className="text-xs text-muted-foreground">
+                  AWB {tracking.awb}
+                  {tracking.courierName ? ` · ${tracking.courierName}` : ''}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Awaiting pickup</p>
+              )}
+            </div>
+
+            {tracking.status.startsWith('RTO') ? (
+              <p className="mt-3 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                This parcel is returning to us. We will refund or re-ship it — no action needed
+                from you.
+              </p>
+            ) : tracking.status === 'CANCELLED' ? (
+              <p className="mt-3 rounded-md bg-secondary px-3 py-2 text-sm">
+                This shipment was cancelled.
+              </p>
+            ) : (
+              <ol className="mt-4 flex flex-wrap gap-x-6 gap-y-3 text-sm">
+                {TRACKING_STEPS.map((step, index) => {
+                  const active = index <= trackingStepIndex(tracking.status);
+                  return (
+                    <li key={step} className="flex items-center gap-2">
+                      <span
+                        aria-hidden="true"
+                        className={
+                          active
+                            ? 'inline-block h-2.5 w-2.5 rounded-full bg-accent'
+                            : 'inline-block h-2.5 w-2.5 rounded-full border border-border'
+                        }
+                      />
+                      <span className={active ? 'font-medium' : 'text-muted-foreground'}>
+                        {step}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+
+            {tracking.trackingUrl ? (
+              <a
+                href={tracking.trackingUrl}
+                className="mt-3 inline-block text-xs text-accent underline-offset-4 hover:underline"
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                Track with the courier
+              </a>
+            ) : null}
+          </section>
         ) : null}
 
         <div className="mt-6 flex flex-wrap gap-3">

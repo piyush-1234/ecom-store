@@ -14,6 +14,7 @@ import { randomBytes } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { addToCartByToken } from '../src/server/services/cart-core.service';
 import { placeOrder } from '../src/server/services/checkout.service';
+import { applyShipmentEvent, createShipmentRecord } from '../src/server/services/shipping.service';
 
 const prisma = new PrismaClient();
 const STATE_PATH = '.cache/demo-order.json';
@@ -58,6 +59,12 @@ async function create(): Promise<void> {
     variantId: variant.id,
     qty,
   };
+
+  // Give the demo order a shipment, mid-transit, so the tracking timeline renders.
+  const awb = `DEMO${randomBytes(4).toString('hex').toUpperCase()}`;
+  await createShipmentRecord(order.id, { awb, courierName: 'Delhivery Surface' });
+  await applyShipmentEvent({ awb, rawStatus: 'PICKUP SCHEDULED' });
+  await applyShipmentEvent({ awb, rawStatus: 'IN TRANSIT' });
 
   mkdirSync('.cache', { recursive: true });
   writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));

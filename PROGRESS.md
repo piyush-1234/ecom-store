@@ -17,7 +17,7 @@ Phase-by-phase log. Commit-style entries. Updated at the end of every phase.
 | 2 | Auth (email + phone OTP), account, addresses | ✅ **Complete** | tsc ✔ · 86/86 unit tests ✔ · build 15 routes ✔ · **29/29 e2e smoke** ✔ · guard redirect 307 ✔ |
 | 3 | Storefront — catalog, PDP, variants, size chart, search, filters, cart | ✅ **Complete** | 102/102 unit ✔ · **14/14 cart integration** ✔ · **32/32 storefront smoke** ✔ · 29/29 auth regression ✔ · build 22 routes ✔ |
 | 4 | Checkout — address, pincode, Razorpay + COD, order, GST invoice PDF | ✅ **Complete** (prepaid gated) | **146/146 unit** ✔ · **34/34 checkout integration** ✔ · **41/41 HTTP** ✔ · invoice served as real PDF ✔ |
-| 5 | Shipping — Shiprocket webhook, tracking, status sync | ⬜ Not started | — |
+| 5 | Shipping — Shiprocket webhook, tracking, status sync | ✅ **Complete** (adapter gated) | **178/178 unit** ✔ · **21/21 shipping lifecycle** ✔ · **44/44 HTTP** ✔ · tracking UI verified visually ✔ |
 | 6 | Returns/exchanges, refunds, admin order management | ⬜ Not started | — |
 | 7 | Admin dashboard — product CRUD, inventory, coupons, analytics | ⬜ Not started | — |
 | 8 | Hardening — tests, rate limiting, headers, SEO, a11y, error tracking | ⬜ Not started | — |
@@ -287,5 +287,57 @@ its components` · invoice contains the order number, HSN, CGST/SGST and "Rs." a
   returns "Online payment is not enabled yet". The integration is real but unverified
   without test keys (`BLK-005`, approval gate #1). Signature verification is covered by
   unit tests with a locally generated secret.
+
+---
+
+### `feat(phase-5): shipping lifecycle — Shiprocket webhook, status sync, tracking UI`
+
+**Done**
+- `status-map.ts` — Shiprocket status strings → internal `ShipmentStatus`, plus order
+  progression rules (`shouldAdvanceOrder`) and restock eligibility, as pure functions
+- `shiprocket.ts` — adapter (token auth cached ~9 days, create shipment, live
+  serviceability, cancel) **fully gated** on `SHIPROCKET_ENABLED`
+- `shipping.service` — `applyShipmentEvent` runs the whole transition in one transaction:
+  shipment update, forward-only order advancement, COD payment capture on delivery, and
+  restocking guarded by a new `Shipment.restockedAt` column
+- `/api/shipping/shiprocket/webhook` — shared-token auth (`x-api-key`), 503 when
+  unconfigured, 401 on bad token, 200 for accepted-or-ignored events, 500 on failure so
+  Shiprocket retries
+- Order page now shows a delivery timeline (Confirmed → Shipped → Out for delivery →
+  Delivered) with AWB, courier and an RTO notice
+- `maybeCreateShipmentForOrder` called best-effort after COD checkout — a shipping outage
+  can never lose a paid order
+- Migration `shipment_restocked_at`
+
+**Verified — executed**
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` | ✅ exit 0 |
+| `npx vitest run` | ✅ **178/178** (added 32 shipping tests) |
+| `npx tsx scripts/smoke-shipping.ts` | ✅ **21/21** against real Postgres |
+| `node scripts/smoke-store.mjs` | ✅ **44/44** HTTP (incl. webhook auth) |
+| `node scripts/smoke-auth.mjs` | ✅ 29/29 |
+| `npx next build` | ✅ exit 0 |
+| Tracking UI | ✅ rendered with AWB + stepper (`docs/screenshots/phase5-order-tracking.png`) |
+
+**The bug this phase existed to catch**
+
+`UNDELIVERED`.includes(`DELIVERED`) is `true`. My first mapping checked "delivered" first, so
+a **failed delivery would have marked the order as delivered** — and, worse, captured the COD
+payment. The unit test caught it; the checks are now ordered exceptions-before-positives and
+that ordering is asserted explicitly. This is exactly the class of bug that a webhook-driven
+system hides until real traffic arrives.
+
+**Also verified by the lifecycle test:** late/out-of-order webhooks cannot regress an order;
+RTO restocks exactly once (replay is a no-op); stock is not restored while a parcel is still
+in transit; unknown AWBs and unmapped statuses are reported as *not handled* rather than
+guessed at.
+
+**Not verified**
+- **Live Shiprocket calls** (auth, create order, serviceability) — no credentials. The
+  adapter is written to the documented REST shape and gated off. `BLK-005`.
+- The webhook payload is parsed defensively (`current_status` ?? `shipment_status`, awb or
+  awb_code, shipment_id or order_id), but real payload field names could differ; a single
+  captured sample payload would settle it.
 
 ---
