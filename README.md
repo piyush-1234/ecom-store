@@ -87,15 +87,40 @@ npm run db:seed
 npm run dev
 ```
 
-If you have no Postgres at all, you need to provide one before the app can serve data —
-either install Docker and use Option A, or point `DATABASE_URL` at a free Neon/Supabase
-Postgres instance. There is deliberately **no bundled embedded-database fallback**: adding
-a third, unverified database path is worse than documenting the requirement clearly.
+### Option B — No Docker (verified path)
 
-> ⚠️ **Phase 1 status:** migrations and seed are **written but not executed** — the
-> authoring machine had neither Docker nor PostgreSQL. Verified so far: Prisma client
-> generation, migration SQL generation, `tsc`, unit tests, and `next build`. See
-> [`BLOCKERS.md`](./BLOCKERS.md) `BLK-002` / `BLK-009`.
+A PostgreSQL 18 cluster can be run entirely from the repo — no Docker, no global install,
+no admin rights:
+
+```bash
+cp .env.example .env
+
+# 1. Start the embedded Postgres (first run initialises, ~30s)
+npm run dev:db
+#    -> postgresql://postgres:postgres@localhost:5433/store?schema=public
+#    (leave this running; Ctrl+C to stop)
+
+# 2. In a second terminal: install and prepare
+npm install
+npx prisma generate
+npx prisma migrate deploy
+npm run db:seed
+
+# 3. Run
+npm run dev
+```
+
+The cluster lives in `.pgdata/` (gitignored) and is created with `--encoding=UTF8
+--locale=C`. UTF-8 is required — the Windows default locale produces WIN1252, which cannot
+store `₹` or non-Latin addresses and will break migrations.
+
+If you prefer a managed database instead, point `DATABASE_URL` at a Neon/Supabase instance
+and skip step 1.
+
+> ✅ **Verified status:** migrations and seed have both been **executed** against a real
+> PostgreSQL 18 instance (40 products / 480 variants), the seed is **idempotent**, and the
+> auth + address flows pass a **29-assertion end-to-end smoke test**
+> (`node scripts/smoke-auth.mjs`). See [`PROGRESS.md`](./PROGRESS.md).
 
 ---
 
@@ -138,6 +163,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 | `npm run db:seed` | Seed catalogue |
 | `npm run db:studio` | Prisma Studio |
 | `npm run db:reset` | **Drop + recreate + reseed** (local only) |
+| `npm run dev:db` | Start the embedded PostgreSQL 18 dev cluster |
 | `npm run verify` | typecheck + lint + test |
 
 ---
@@ -288,7 +314,7 @@ deploy-time / CI use.
 |---|---|---|
 | 0 | Docs | ✅ |
 | 1 | Scaffold · schema · migration · seed · Docker · CI | ✅ |
-| 2 | Auth (email + phone OTP), account, addresses | ⬜ |
+| 2 | Auth (email + phone OTP), account, addresses | ✅ |
 | 3 | Storefront — catalogue, PDP, variants, size chart, search, filters, cart | ⬜ |
 | 4 | Checkout — pincode, Razorpay + COD, order, GST invoice PDF | ⬜ |
 | 5 | Shipping — Shiprocket webhook, tracking, status sync | ⬜ |

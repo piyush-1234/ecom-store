@@ -25,6 +25,9 @@ export default function HomePage() {
             <Link href="/cart" className="whitespace-nowrap transition-colors hover:text-accent">
               Cart
             </Link>
+            <Link href="/account" className="whitespace-nowrap transition-colors hover:text-accent">
+              Account
+            </Link>
           </nav>
         </div>
       </header>

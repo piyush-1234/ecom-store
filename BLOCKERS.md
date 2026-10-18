@@ -77,27 +77,44 @@ Razorpay, Shiprocket, Resend, and object storage credentials are **not** present
 
 ---
 
-## BLK-009 · HIGH · OPEN — Migrations and seed are written but never executed
+## BLK-009 · ✅ RESOLVED — Migrations and seed had never been executed
 
-**Symptom.** No PostgreSQL server and no Docker on this machine, so there is nothing for
-`prisma migrate deploy` / `prisma db seed` to connect to. `GET /api/health` correctly
-returns `503 { db: "down" }`.
+**Resolution.** Introduced `embedded-postgres` as a devDependency (no Docker, no global
+install). `npm run dev:db` starts a real PostgreSQL 18 cluster on port 5433 with the data
+directory inside the repo.
 
-**Impact.** The data model, migration SQL and seed script exist and typecheck, but **zero
-rows have ever been written**. The seed summary in the Phase 1 report is the *designed*
-dataset, not a verified row count. Phase 2 (auth) cannot be meaningfully built or tested
-without a database either — this blocks the rest of the project, not just Phase 1.
+Executed and verified:
+- `prisma migrate deploy` → `0001_init` applied
+- `prisma migrate dev --name user_email_optional` → second migration created + applied
+- `npm run db:seed` → 40 products, 480 variants, 435 in stock, 3 coupons, 6 pincode rules
+- Seed re-run → **identical counts (idempotent)**
+- `server_encoding` = **UTF8**; `₹` + Devanagari round-trip PASS (transaction rolled back)
 
-**What I did instead.** Generated the migration SQL without a database using
-`prisma migrate diff --from-empty --to-schema-datamodel` (19 tables, 19.6 KB), and
-verified everything that does not need a connection: client generation, types, unit
-tests, production build, HTTP render.
+Two genuine defects were found by doing this (both fixed): a UTF-8 BOM in `migration.sql`
+that Postgres rejected, and a cluster created with the Windows locale (WIN1252) that
+could not store non-ASCII text.
 
-**Decision needed — pick one:**
-1. Install Docker Desktop and run `docker compose up --build` (also verifies `BLK-002`), or
-2. Give me a Postgres connection string (Neon/Supabase free tier is fine) — I will run
-   `migrate deploy` + `seed` and report real row counts, or
-3. Confirm you want the embedded-Postgres dev path and I will add it and verify it.
+**Remaining caveat.** This is a *development* database inside the repo. Production still
+needs a managed Postgres (Neon/Supabase) — that is a deployment decision, not a blocker.
+
+---
+
+## BLK-010 · MEDIUM · OPEN — Rate limiting is in-process and trusts `x-forwarded-for`
+
+**Context.** `src/server/http.ts` implements a fixed-window limiter held in a module-level
+`Map`, keyed by an IP taken from `x-forwarded-for`.
+
+**Two limitations:**
+1. **Per-process only.** On Vercel/serverless each instance has its own map, so limits are
+   per-instance rather than global. Redis-backed limiting is the phase-3 fix.
+2. **`x-forwarded-for` is trusted blindly.** Safe behind Vercel/a proxy that overwrites the
+   header. If the app is ever exposed directly, a client can spoof the header and evade
+   limits. The smoke test relies on this to simulate distinct clients.
+
+**Mitigations already in place.** OTP is additionally attempt-capped and single-use at the
+database level, so brute-forcing a 6-digit code is bounded regardless of IP limits.
+
+**Decision needed.** None now; must be fixed before public launch (phase 8 hardening).
 
 ---
 

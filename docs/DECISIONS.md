@@ -200,3 +200,63 @@ image hosts would make the app depend on third-party availability and slow first
 
 **Consequence.** The storefront renders deterministically offline with zero external
 requests. Replaced by real photography in Phase 3 via the storage adapter.
+
+---
+
+## ADR-017 — `embedded-postgres` as a devDependency for the local database
+
+**Context.** The authoring environment had neither Docker nor a system PostgreSQL, so the
+data model had never touched a database (`BLK-009`). The brief's DoD requires a seeded store
+running locally, and Phase 2 onward needs a live database for every test.
+
+**Decision.** Add `embedded-postgres` as a **devDependency**. It ships platform-specific
+Postgres binaries as an optional dependency, so `npm run dev:db` starts a real PostgreSQL 18
+cluster on port 5433 with its data directory inside the repo (`.pgdata/`, gitignored).
+`docker-compose.yml` remains the documented/CI path.
+
+**Consequence.** No global install, no admin rights, no Docker required for development.
+Trade-offs: ~105 MB of binaries per developer, and the cluster is single-node/local-only.
+Production still uses a managed Postgres.
+
+**Critical detail discovered:** the cluster must be created with
+`initdbFlags: ['--encoding=UTF8', '--locale=C']`. The Windows default locale creates a
+**WIN1252** database, which cannot store `₹` or Devanagari and fails migration import with
+`0xEF 0xBB 0xBF ... has no equivalent in encoding "WIN1252"`. This is now enforced in
+`scripts/dev-db.ts` and documented in the README.
+
+---
+
+## ADR-018 — OTPs stored as HMAC-SHA256, not bcrypt; security comes from caps, not hashing
+
+**Context.** A 6-digit OTP has only 10^6 possible values. Hashing it with bcrypt would add
+~300 ms to each verification while providing little protection: an attacker holding the hash
+can brute-force the 10^6 space offline regardless of the algorithm. The real defences are a
+short TTL, a hard attempt cap, and single-use consumption.
+
+**Decision.** Store `HMAC-SHA256(AUTH_SECRET, phone + ":" + code)`. Verify with
+`timingSafeEqual`. Enforce: 10-minute TTL, `OTP_MAX_ATTEMPTS` (default 5), mark consumed
+**before** touching the user record, and refuse re-issue within 30 seconds.
+
+**Consequence.** Fast verification, no plaintext codes at rest, and replay is impossible
+because the token is burned before the session is created. If OTPs are ever lengthened to
+something with meaningful entropy (or reused across purposes), revisit this.
+
+---
+
+## ADR-019 — Session logic split into pure `session.ts` + `session-cookie.ts`; guard in layout, not middleware
+
+**Context.** `next/headers` cannot be imported in a plain Vitest node environment, so mixing
+`cookies()` into the JWT module made the signing logic untestable. Separately, a middleware
+guard can only cheaply check that a cookie *exists* — it would need to re-verify the JWT on
+every request.
+
+**Decision.**
+1. `session.ts` holds only `signSession` / `verifySession` (pure, unit-tested).
+   `session-cookie.ts` owns `cookies()` access.
+2. The `/account` guard lives in `app/account/layout.tsx` and calls `getCurrentSession()`,
+   which **verifies the signature** before rendering. `redirect('/login')` otherwise.
+
+**Consequence.** Session logic is covered by unit tests (tampering, wrong secret, garbage
+input) without mocking Next internals, and an expired/forged token can never render account
+content. Cost: the auth check runs per-request in the layout rather than once in middleware —
+acceptable at this scale, and it is the correct trade for actually validating the token.

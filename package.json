@@ -23,6 +23,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset --force",
+    "dev:db": "tsx scripts/dev-db.ts",
     "verify": "npm run typecheck && npm run lint && npm run test"
   },
   "prisma": {
@@ -30,23 +31,27 @@
   },
   "dependencies": {
     "@prisma/client": "5.22.0",
+    "bcryptjs": "^3.0.3",
     "class-variance-authority": "0.7.0",
     "clsx": "2.1.1",
     "date-fns": "3.6.0",
-    "next": "14.2.15",
+    "jose": "^6.2.12",
+    "next": "14.2.35",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "tailwind-merge": "2.5.4",
     "zod": "3.23.8"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "22.9.0",
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.1",
     "autoprefixer": "10.4.20",
     "dotenv": "16.4.5",
+    "embedded-postgres": "^18.4.0-beta.17",
     "eslint": "8.57.1",
-    "eslint-config-next": "14.2.15",
+    "eslint-config-next": "14.2.35",
     "postcss": "8.4.47",
     "prettier": "3.3.3",
     "prisma": "5.22.0",

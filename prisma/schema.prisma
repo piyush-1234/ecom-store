@@ -117,8 +117,13 @@ enum CouponType {
 // ---------------------------------------------------------------------------
 
 model User {
-  id              String    @id @default(cuid())
-  email           String    @unique
+  id String @id @default(cuid())
+
+  // A customer may sign up with email+password OR phone OTP, so both are optional.
+  // At least one of the two must be present — enforced in the auth service, not by
+  // the database, because a partial unique index across nullable columns is awkward
+  // in Prisma and the invariant belongs with the signup rules.
+  email           String?   @unique
   emailVerifiedAt DateTime?
   passwordHash    String?
   name            String?

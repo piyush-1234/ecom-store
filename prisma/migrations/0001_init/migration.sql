@@ -1,4 +1,4 @@
-﻿-- CreateEnum
+-- CreateEnum
 CREATE TYPE "AdminRole" AS ENUM ('ADMIN', 'OPS');
 
 -- CreateEnum
