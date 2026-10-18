@@ -580,3 +580,41 @@ installed — `BLK-002`). The equivalent zero-manual-step path (`npm run dev:db`
 seed → run) *is* verified.
 
 ---
+
+### `docs: Part A ground-truth audit — STATE.md + GAP-ANALYSIS.md`
+
+**Type:** audit only. **No application code was changed.**
+
+**Executed in this audit**
+| Command | Result |
+|---|---|
+| `npx tsx scripts/dev-db.ts` | ✅ embedded Postgres up on :5433 |
+| `node scripts/db-ping.mjs` | ✅ 40 products · 480 variants · 0 orders · 0 users |
+| `node scripts/preflight.mjs` (bare) | ❌ exit 1 — `AUTH_SECRET is missing`, `NEXT_PUBLIC_APP_URL is missing` (script never loads `.env`) |
+| `node scripts/preflight.mjs` (env exported) | ❌ exit 1 — only blocker is the dev `AUTH_SECRET`, which is correct |
+| `npm test` | ✅ **222/222**, exit 0 |
+| `npm run build` | ✅ exit 0 |
+| `npm start` + `curl /api/health` | ✅ `{"status":"ok","db":"up",...}` HTTP 200 |
+| `curl /admin/products` (build-identity probe) | ✅ 307 — running build is current |
+| Playwright screenshots | ✅ `docs/screenshots/audit-home-{desktop,mobile}.png`, both vision-verified |
+
+**Premise corrections recorded.** The brief's "locked-in facts" contain three errors:
+1. **`Local deployment checklist.txt` does not exist** anywhere in the repo or `E:\automation`.
+2. **Auth is not Auth.js v5** — it is custom `jose` HS256 JWT + `bcryptjs`; `next-auth` and
+   `@auth/*` are not installed.
+3. **Razorpay/Shiprocket are not stubbed** — they are real REST clients gated by env flags,
+   never executed against live services.
+
+**Real gaps found** (19 rows in `GAP-ANALYSIS.md`), highest-risk first: GST slab unconfirmed
+(`G1`), **no legal pages and no grievance officer** (`G13`/`G29` — required by Indian
+e-commerce rules), Razorpay never certified (`G2`), brand misspelled `ecomerce-store` (`D2`),
+Shiprocket never executed (`G4`). Also confirmed missing: wishlist, GA4/Meta Pixel, per-PDP
+size chart, coupon editing, SKU search, admin pincode CRUD, image upload, shipped/delivered/
+return emails.
+
+**Not re-run in this audit** (recorded as unverified rather than assumed): Playwright suite,
+Lighthouse, Docker Compose, load test. See `STATE.md` table (b).
+
+**Gate:** Part A stops here. Part B awaits approval.
+
+---
