@@ -12,6 +12,7 @@ import {
 import { checkServiceability } from '@/server/services/pincode.service';
 import { createInvoiceToken } from '@/server/invoice/token';
 import type { InvoiceOrder, InvoiceItem } from '@/server/invoice/pdf';
+import { evaluateCoupon, normalizeCouponCode } from '@/server/services/coupons.rules';
 
 /**
  * Checkout / order placement.
@@ -42,6 +43,8 @@ export interface PlaceOrderInput {
   paymentMethod: PaymentMethod;
   /** Reused on retry to make order creation idempotent. */
   idempotencyKey?: string;
+  /** Optional coupon code applied to this order. */
+  couponCode?: string;
 }
 
 export interface PlacedOrder {
@@ -126,11 +129,67 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlacedOrder> {
     hsnCode: item.variant.product.category.hsnCode,
   }));
 
+  // --- coupon (validated before any stock moves) ---
+  let coupon: {
+    id: string;
+    code: string;
+    usageLimit: number | null;
+    goodsDiscountPaise: number;
+    shippingDiscountPaise: number;
+  } | null = null;
+
+  if (input.couponCode) {
+    const code = normalizeCouponCode(input.couponCode);
+    const row = await prisma.coupon.findUnique({ where: { code } });
+
+    // Same message for unknown and unusable codes — no need to help guessing.
+    if (!row) throw new AppError('CONFLICT', 'That coupon code is not valid.', 409);
+
+    const subtotalForCoupon = lines.reduce((sum, line) => sum + line.unitPricePaise * line.qty, 0);
+    const shippingForCoupon =
+      subtotalForCoupon >= pricing.freeShippingThresholdPaise ? 0 : pricing.shippingFeePaise;
+
+    const userRedemptions = await prisma.couponRedemption.count({
+      where: {
+        couponId: row.id,
+        OR: [
+          ...(input.userId ? [{ userId: input.userId }] : []),
+          ...(input.email ? [{ email: input.email.toLowerCase() }] : []),
+        ],
+      },
+    });
+
+    const evaluated = evaluateCoupon(row, {
+      subtotalPaise: subtotalForCoupon,
+      shippingPaise: shippingForCoupon,
+      now: new Date(),
+      userRedemptions,
+    });
+
+    if (!evaluated.valid) {
+      throw new AppError('CONFLICT', evaluated.message, 409, { code: evaluated.code });
+    }
+
+    coupon = {
+      id: row.id,
+      code: row.code,
+      usageLimit: row.usageLimit,
+      goodsDiscountPaise: evaluated.goodsDiscountPaise,
+      shippingDiscountPaise: evaluated.shippingDiscountPaise,
+    };
+  }
+
   const totals = computeOrderTotals(lines, {
     ...pricing,
     sellerStateCode: env.GST_SELLER_STATE_CODE,
     shipStateCode: gstStateCode(input.address.state) || env.GST_SELLER_STATE_CODE,
     paymentMethod: input.paymentMethod,
+    ...(coupon
+      ? {
+          discountPaise: coupon.goodsDiscountPaise,
+          shippingDiscountPaise: coupon.shippingDiscountPaise,
+        }
+      : {}),
   });
 
   if (input.paymentMethod === 'COD') {
@@ -197,6 +256,8 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlacedOrder> {
         taxPaise: totals.taxPaise,
         totalPaise: totals.totalPaise,
         idempotencyKey: input.idempotencyKey ?? null,
+        couponId: coupon?.id ?? null,
+        couponCode: coupon?.code ?? null,
         confirmedAt: input.paymentMethod === 'COD' ? new Date() : null,
         items: {
           create: cart.items.map((item, index) => {
@@ -236,7 +297,36 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlacedOrder> {
       },
     });
 
-    // 4. Empty the cart.
+    // 4. Record the coupon redemption, refusing to exceed the global cap even
+    //    under concurrency (conditional increment).
+    if (coupon) {
+      if (coupon.usageLimit !== null) {
+        const bumped = await tx.coupon.updateMany({
+          where: { id: coupon.id, usedCount: { lt: coupon.usageLimit } },
+          data: { usedCount: { increment: 1 } },
+        });
+        if (bumped.count !== 1) {
+          throw new AppError('CONFLICT', 'This coupon has been fully redeemed.', 409);
+        }
+      } else {
+        await tx.coupon.update({
+          where: { id: coupon.id },
+          data: { usedCount: { increment: 1 } },
+        });
+      }
+
+      await tx.couponRedemption.create({
+        data: {
+          couponId: coupon.id,
+          orderId: order.id,
+          userId: input.userId,
+          email: input.email.toLowerCase(),
+          amountPaise: coupon.goodsDiscountPaise + coupon.shippingDiscountPaise,
+        },
+      });
+    }
+
+    // 5. Empty the cart.
     await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
     await tx.cart.delete({ where: { id: cart.id } });
 

@@ -19,7 +19,7 @@ Phase-by-phase log. Commit-style entries. Updated at the end of every phase.
 | 4 | Checkout — address, pincode, Razorpay + COD, order, GST invoice PDF | ✅ **Complete** (prepaid gated) | **146/146 unit** ✔ · **34/34 checkout integration** ✔ · **41/41 HTTP** ✔ · invoice served as real PDF ✔ |
 | 5 | Shipping — Shiprocket webhook, tracking, status sync | ✅ **Complete** (adapter gated) | **178/178 unit** ✔ · **21/21 shipping lifecycle** ✔ · **44/44 HTTP** ✔ · tracking UI verified visually ✔ |
 | 6 | Returns/exchanges, refunds, admin order management | ✅ **Complete** | **206/206 unit** ✔ · **21/21 returns lifecycle** ✔ · **9/9 admin smoke** ✔ · 44/44 storefront ✔ |
-| 7 | Admin dashboard — product CRUD, inventory, coupons, analytics | ⬜ Not started | — |
+| 7 | Admin dashboard — product CRUD, inventory, coupons, analytics | ✅ **Complete** | **222/222 unit** ✔ · **14/14 admin** ✔ · **12/12 coupons** ✔ · 44/44 store · 34/34 checkout · 21/21 returns · 21/21 shipping |
 | 8 | Hardening — tests, rate limiting, headers, SEO, a11y, error tracking | ⬜ Not started | — |
 | 9 | Deploy runbook (`docs/DEPLOY.md`) — **no execution without approval** | ⬜ Not started | — |
 
@@ -396,5 +396,61 @@ guessed at.
   test keys (`BLK-005`). Until then, refunds are an ops action reconciled manually.
   Called out explicitly rather than implied.
 - Coupons, product CRUD and analytics remain Phase 7.
+
+---
+
+### `feat(phase-7): admin dashboard, product CRUD, inventory, coupons, analytics`
+
+**Done**
+- `coupons.rules` — pure coupon evaluation (active window, global cap, per-customer limit,
+  minimum spend, percent/flat/free-shipping) with explicit rejection codes
+- Coupon redemption **wired into checkout**: validated before any stock moves, applied to
+  goods or shipping, recorded as a `CouponRedemption`, and the global usage cap enforced by
+  a **conditional increment** inside the order transaction (concurrent use cannot exceed it)
+- `admin-products.service` — create/update products, generated slugs and SKUs, variant
+  matrix creation, absolute stock set, low-stock inventory query
+- `admin-analytics.service` — revenue (excluding cancelled/RTO), AOV, top products by units,
+  recent orders, low-stock count
+- `admin-coupons.service` + Zod validation for coupon creation
+- Admin UI: dashboard, products list (search + activate toggle), new product (size × colour
+  matrix), product edit (per-variant price/stock/active), inventory (quick absolute set),
+  coupons (create + toggle)
+- Nav updated; all pages behind the admin guard
+
+**Verified — executed**
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` | ✅ exit 0 |
+| `npx vitest run` | ✅ **222/222** (added 16 coupon tests) |
+| `node scripts/smoke-admin.mjs` | ✅ **14/14** (dashboard, products, new, inventory, coupons all render) |
+| `npx tsx scripts/smoke-coupons.ts` | ✅ **12/12** against real Postgres |
+| `node scripts/smoke-store.mjs` | ✅ 44/44 |
+| `node scripts/smoke-auth.mjs` | ✅ 29/29 |
+| `npx tsx scripts/smoke-checkout.ts` | ✅ 34/34 |
+| `npx tsx scripts/smoke-returns.ts` | ✅ 21/21 |
+| `npx tsx scripts/smoke-shipping.ts` | ✅ 21/21 |
+| `npx next build` | ✅ exit 0 |
+
+Coupon assertions cover the money and the guardrails: percentage + prepaid incentive stack
+correctly, `usedCount` increments, a redemption row is written, **a second use by the same
+customer is refused**, unknown codes are refused, free-shipping zeroes the shipping charge,
+and a below-minimum coupon is refused with the shortfall in the message.
+
+**Environment trap (second time, now understood)**
+`next start` kept failing with `EADDRINUSE` while `Get-Process node` reported **zero**
+processes and `Get-NetTCPConnection` reported **no listener** — yet requests to :3000 were
+answered by an older build. Process/port visibility is filtered in this sandbox, so the
+stale server was invisible and could not be killed. Two verification runs were briefly
+misattributed to the new build before the probe caught it.
+
+Resolution: a **build-identity probe** before trusting any HTTP result —
+`GET /admin/products` must return **307** (route exists, guard redirects) and not **404**
+(route missing). Verification then ran on a fresh port (:3100) instead of fighting :3000.
+Logged as `BLK-012`.
+
+**Not verified**
+- Admin pages are verified **over HTTP** (200 + rendered), not visually: the admin cookie is
+  `httpOnly`, and headless Chrome cannot be handed a cookie by this toolchain. Deliberate:
+  I will not add a dev backdoor route just to take a screenshot.
 
 ---

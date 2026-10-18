@@ -170,6 +170,24 @@ export function CheckoutForm({ razorpayEnabled }: { razorpayEnabled: boolean }) 
       </section>
 
       <section className="space-y-3">
+        <h2 className="text-sm font-semibold">Coupon</h2>
+        <div>
+          <Label htmlFor="couponCode">Coupon code (optional)</Label>
+          <Input
+            id="couponCode"
+            name="couponCode"
+            placeholder="WELCOME10"
+            autoComplete="off"
+            className="mt-1.5 uppercase placeholder:normal-case"
+          />
+          <FieldError message={fields.couponCode} />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Applied on submit — the order total will confirm it.
+          </p>
+        </div>
+      </section>
+
+      <section className="space-y-3">
         <h2 className="text-sm font-semibold">Payment</h2>
 
         <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border p-3">

@@ -22,6 +22,8 @@ export const checkoutSchema = z.object({
   phone: phoneSchema,
   address: checkoutAddressSchema,
   paymentMethod: paymentMethodSchema,
+  /** Optional coupon code; validation happens server-side against the live coupon. */
+  couponCode: z.string().trim().max(40).optional(),
   /** Client-generated; makes a double submit return the same order. */
   idempotencyKey: z
     .string()

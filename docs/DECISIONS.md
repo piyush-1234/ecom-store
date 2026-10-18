@@ -415,3 +415,53 @@ count goods you have not received.
 **Consequence.** Inventory always reflects physical reality: reserved units are not sellable,
 received units are. The lifecycle test asserts each transition, including that approval does
 *not* restock and cancellation *does* release.
+
+---
+
+## ADR-027 — Coupons are evaluated by pure rules; the usage cap is enforced inside the transaction
+
+**Context.** Coupon logic tends to drift between the cart preview, the checkout and the
+admin UI. And a "check then increment" usage cap is a classic race: two simultaneous orders
+can both pass the check.
+
+**Decisions.**
+
+1. **One pure evaluator** (`coupons.rules.ts`) returns `{valid, code, message}` or the
+   computed goods/shipping discount. Checkout and tests call the same function; the admin
+   form validates into the same shape.
+2. **Validate before any stock moves** — a rejected coupon must not decrement inventory.
+3. **Enforce the cap with a conditional update** inside the order transaction:
+   `updateMany({ where: { id, usedCount: { lt: usageLimit } }, data: { increment: 1 } })`
+   and treat `count !== 1` as exhausted. The order rolls back.
+4. **Per-customer limit is checked against redemptions by user id OR email**, so a guest
+   cannot bypass it by not signing in.
+5. A coupon discounts **goods or shipping, never both** — which keeps the GST treatment
+   unambiguous.
+
+**Consequence.** The cap holds under concurrency, and "why was my code rejected?" has exactly
+one implementation. The trade-off is one extra query at quote time.
+
+---
+
+## ADR-028 — Admin product editing: generated identifiers, absolute stock, variants are never deleted
+
+**Context.** Editing a product after it has sold is where catalogues get corrupted. Renaming
+can silently change URLs; deleting a variant breaks order history and invoices; stock "add"
+operations compound mistakes.
+
+**Decisions.**
+
+1. **Slugs are generated once** (`slugify`) and never rewritten on edit. They appear in URLs
+   and are snapshotted nowhere, so stability matters.
+2. **SKUs are generated deterministically** from category prefix, product index, colour code
+   and size — unique per size × colour, and stable for the same inputs.
+3. **Stock edits are absolute** ("set to 12"), never "+12". A typo is recoverable by typing
+   the right number.
+4. **Variants are deactivated, never deleted.** Order items reference variants; deleting one
+   would cascade damage into completed orders.
+5. **Variant creation uses a compact matrix** (`S,M,L` × `Black:#0B0B0B,Olive:#5F6F3E`)
+   rather than dozens of inputs — one size and one colour still yields exactly one variant.
+
+**Consequence.** The catalogue can be edited safely after sales exist. The cost is that a
+mistyped slug is permanent (deliberate) and that unused variants accumulate — acceptable,
+because deactivating them removes them from the storefront.

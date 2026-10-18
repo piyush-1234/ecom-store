@@ -34,6 +34,8 @@ export interface PricingOptions {
   prepaidDiscountPaise: number;
   /** Extra discount (e.g. coupon) applied to goods before tax. */
   discountPaise?: number;
+  /** Reduction of the shipping charge (e.g. a free-shipping coupon). */
+  shippingDiscountPaise?: number;
   rule?: GstRule;
   /** Service GST rate for shipping / COD fee. */
   serviceGstRate?: number;
@@ -120,9 +122,10 @@ export function computeOrderTotals(
   const grossPerLine = lines.map((line) => line.unitPricePaise * line.qty);
   const subtotalPaise = grossPerLine.reduce((sum, value) => sum + value, 0);
 
-  // Shipping is free above the threshold; COD and prepaid incentives are additive.
-  const shippingPaise =
+  // Shipping is free above the threshold; a free-shipping coupon can reduce it further.
+  const baseShippingPaise =
     subtotalPaise >= options.freeShippingThresholdPaise ? 0 : options.shippingFeePaise;
+  const shippingPaise = Math.max(0, baseShippingPaise - (options.shippingDiscountPaise ?? 0));
   const codFeePaise = options.paymentMethod === 'COD' ? options.codFeePaise : 0;
   const prepaidDiscountPaise =
     options.paymentMethod === 'PREPAID' ? options.prepaidDiscountPaise : 0;

@@ -23,6 +23,7 @@ function readForm(formData: FormData) {
     email: value('email'),
     phone: value('phone'),
     paymentMethod: value('paymentMethod'),
+    couponCode: value('couponCode') || undefined,
     idempotencyKey: value('idempotencyKey') || undefined,
     acceptTerms: value('acceptTerms'),
     address: {
@@ -88,6 +89,7 @@ export async function placeOrderAction(
         pincode: input.address.pincode,
       },
       paymentMethod: input.paymentMethod,
+      couponCode: input.couponCode,
       idempotencyKey: input.idempotencyKey,
     });
   } catch (error) {

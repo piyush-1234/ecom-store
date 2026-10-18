@@ -114,6 +114,32 @@ needs a managed Postgres (Neon/Supabase) — that is a deployment decision, not 
 
 ---
 
+## BLK-012 · MEDIUM · ENVIRONMENT — Port and process visibility is filtered, so stale servers are invisible
+
+**Symptom.** `npx next start -p 3000` fails with `EADDRINUSE`, while:
+- `Get-Process node` reports **zero** processes
+- `Get-NetTCPConnection -LocalPort 3000 -State Listen` reports **nothing**
+- yet HTTP requests to `:3000` are answered, by an **older build**
+
+A previous server survives the task that started it, cannot be seen, and cannot be killed
+from here — so `Stop-Process` on the reported PID does nothing and the new build never binds.
+
+**Impact.** Verification can silently test a stale build. This already caused two rounds of
+misattributed results (Phase 6 and Phase 7): assertions passed against code that did not
+contain the feature under test.
+
+**What I did instead.**
+1. Added a **build-identity probe** before trusting any HTTP result:
+   `GET /admin/products` must return **307** (route exists → guard redirects). A **404**
+   means the route is missing, i.e. a stale build is serving.
+2. Ran Phase 7 verification on **:3100** rather than fighting for :3000.
+
+**Decision needed.** None for correctness — the probe + alternate port works. But be aware
+that a long-running `next start` from an earlier task may still be serving :3000 with old
+code. Restart the machine (or use a fresh port) before manual testing.
+
+---
+
 ## BLK-011 · MEDIUM · OPEN — No browser automation, so UI interactions are verified below the click layer
 
 **Context.** Phase 3 adds an add-to-cart flow implemented as a React Server Action bound to

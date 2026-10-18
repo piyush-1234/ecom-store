@@ -22,11 +22,23 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               ecomerce-store · admin
             </Link>
             <nav aria-label="Admin" className="flex items-center gap-4 text-sm">
+              <Link href="/admin" className="hover:text-accent">
+                Dashboard
+              </Link>
               <Link href="/admin/orders" className="hover:text-accent">
                 Orders
               </Link>
               <Link href="/admin/returns" className="hover:text-accent">
                 Returns
+              </Link>
+              <Link href="/admin/products" className="hover:text-accent">
+                Products
+              </Link>
+              <Link href="/admin/inventory" className="hover:text-accent">
+                Inventory
+              </Link>
+              <Link href="/admin/coupons" className="hover:text-accent">
+                Coupons
               </Link>
             </nav>
           </div>

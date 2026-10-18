@@ -97,6 +97,21 @@ async function main() {
   const returns = await req('GET', '/admin/returns');
   ok('authenticated /admin/returns renders', returns.status === 200, `status=${returns.status}`);
 
+  const dashboard = await req('GET', '/admin');
+  ok('authenticated /admin dashboard renders', dashboard.status === 200, `status=${dashboard.status}`);
+
+  const products = await req('GET', '/admin/products');
+  ok('authenticated /admin/products renders', products.status === 200, `status=${products.status}`);
+
+  const newProduct = await req('GET', '/admin/products/new');
+  ok('authenticated /admin/products/new renders', newProduct.status === 200, `status=${newProduct.status}`);
+
+  const inventory = await req('GET', '/admin/inventory');
+  ok('authenticated /admin/inventory renders', inventory.status === 200, `status=${inventory.status}`);
+
+  const coupons = await req('GET', '/admin/coupons');
+  ok('authenticated /admin/coupons renders', coupons.status === 200, `status=${coupons.status}`);
+
   console.log(`\n${passed} passed, ${failures.length} failed\n`);
   if (failures.length > 0) {
     console.log('Failed:\n' + failures.map((f) => `  - ${f}`).join('\n') + '\n');
