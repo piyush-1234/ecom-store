@@ -13,8 +13,42 @@ export const metadata: Metadata = {
 export default async function HomePage() {
   const [categories, featured] = await Promise.all([listCategories(), getFeaturedProducts(4)]);
 
+  // Site-level structured data: helps search engines and AI answer engines identify
+  // the business and expose the internal search box.
+  const base = siteConfig.url.replace(/\/$/, '');
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Organization',
+        '@id': `${base}/#organization`,
+        name: siteConfig.name,
+        url: base,
+        email: siteConfig.supportEmail,
+        address: { '@type': 'PostalAddress', addressCountry: 'IN' },
+      },
+      {
+        '@type': 'WebSite',
+        '@id': `${base}/#website`,
+        url: base,
+        name: siteConfig.name,
+        publisher: { '@id': `${base}/#organization` },
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: { '@type': 'EntryPoint', urlTemplate: `${base}/search?q={search_term_string}` },
+          'query-input': 'required name=search_term_string',
+        },
+      },
+    ],
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+
       <section className="container-page py-14 sm:py-20">
         <p className="mb-4 inline-flex items-center rounded-full border border-border bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground">
           Made for Indian bodies

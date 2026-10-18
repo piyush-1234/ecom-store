@@ -465,3 +465,48 @@ operations compound mistakes.
 **Consequence.** The catalogue can be edited safely after sales exist. The cost is that a
 mistyped slug is permanent (deliberate) and that unused variants accumulate — acceptable,
 because deactivating them removes them from the storefront.
+
+---
+
+## ADR-029 — Browser E2E runs serially against an already-running server, on a phone viewport
+
+**Context.** Unit and HTTP tests all passed while the storefront's checkout button was a
+disabled placeholder — proof that layer-level tests miss wiring defects. Real browser tests
+were needed, but this environment cannot reliably start or kill servers (BLK-012), and
+Playwright's default parallel workers would race on shared cart/order state.
+
+**Decisions.**
+
+1. **Serial execution** (`workers: 1`, `fullyParallel: false`). Orders and carts are shared
+   state; determinism beats speed at this suite size.
+2. **Phone viewport** (`Pixel 5`) for every test, because the store is mobile-first and the
+   first real bug found (admin header swallowing clicks) only reproduced at 393 px.
+3. **The suite never starts a server.** It targets `E2E_BASE_URL`, and a separate
+   **build-identity probe** confirms which build is serving before results are trusted.
+4. **Assertions on outcomes, not implementation** — the journey checks that a PDF with a
+   `%PDF-` header downloads, and that the same URL 404s without its token.
+
+**Consequence.** 13 tests run in ~30 s and cover the definition-of-done path. The cost is a
+~118 MB chromium download kept in the workspace (`.cache/ms-playwright`, gitignored) and no
+parallelism.
+
+---
+
+## ADR-030 — CSP shipped enforced with `'unsafe-inline'`; error reporting is a webhook, not an SDK
+
+**Context.** Phase 8 requires security headers and error tracking, with no external accounts
+or keys available (approval gate #1), and no Sentry DSN supplied.
+
+**Decisions.**
+
+1. **CSP is enforced, not report-only**, but `script-src` includes `'unsafe-inline'` because
+   Next inlines its bootstrap without a nonce. `'unsafe-eval'` is added only in development
+   (the dev overlay needs it). All other directives are strict. The nonce upgrade is
+   documented as `BLK-013` rather than promised.
+2. **Error reporting is provider-agnostic**: always emit structured JSON to stderr; if
+   `ERROR_WEBHOOK_URL` is set, POST the same payload with a 3-second abort. No SDK, no DSN
+   requirement, and the reporter is guaranteed not to throw.
+
+**Consequence.** Headers and error visibility work with zero external configuration, and adding
+Sentry later is an env var plus a URL, not a code change. The trade-off is a weaker CSP than a
+nonce setup would give.

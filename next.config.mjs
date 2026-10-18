@@ -16,8 +16,27 @@ const nextConfig = {
     formats: ['image/avif', 'image/webp'],
   },
 
-  // Baseline security headers. The CSP is added in Phase 8 (report-only first).
+  // Baseline security headers + CSP. The CSP allows 'unsafe-inline' for scripts
+  // because Next injects inline bootstrap/flight data without a nonce; a nonce
+  // requires middleware and is the documented upgrade path (BLK-013).
   async headers() {
+    const isDev = process.env.NODE_ENV !== 'production';
+
+    const csp = [
+      "default-src 'self'",
+      // 'unsafe-eval' is needed by the dev overlay only.
+      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data:",
+      "connect-src 'self' https:",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      'upgrade-insecure-requests',
+    ].join('; ');
+
     return [
       {
         source: '/:path*',
@@ -30,6 +49,8 @@ const nextConfig = {
             key: 'Strict-Transport-Security',
             value: 'max-age=63072000; includeSubDomains; preload',
           },
+          { key: 'Content-Security-Policy', value: csp },
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
         ],
       },
     ];

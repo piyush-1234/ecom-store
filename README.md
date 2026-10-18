@@ -246,9 +246,45 @@ HSN codes: **6109** knitted t-shirts · **6203** men's woven trousers/jeans.
 ## Testing
 
 ```bash
-npm test              # unit
-npm run test:e2e      # e2e (Phase 8)
+npm test              # unit (vitest)
 npm run verify        # typecheck + lint + test
+```
+
+### End-to-end (Playwright)
+
+The browser suite does **not** start a server; point it at a running one.
+
+```bash
+# one-off browser download, kept inside the workspace
+PLAYWRIGHT_BROWSERS_PATH="$PWD/.cache/ms-playwright" npx playwright install chromium
+
+# run against whatever is serving the current build
+PLAYWRIGHT_BROWSERS_PATH="$PWD/.cache/ms-playwright" \
+E2E_BASE_URL=http://127.0.0.1:3400 npx playwright test
+```
+
+13 tests cover the full purchase journey (including the GST invoice PDF), admin login and
+every admin surface, and accessibility basics (single `h1`, alt text, named buttons,
+landmarks, keyboard skip link).
+
+### Load test
+
+```bash
+node scripts/load-test.mjs http://127.0.0.1:3400 10 20   # 10s, 20 concurrent
+```
+
+Reports p50/p95/p99 and fails if p95 exceeds 1500 ms or the error rate exceeds 1%.
+
+### Service and integration suites (need the database)
+
+```bash
+npx tsx scripts/smoke-checkout.ts    # order placement, stock guard, invoice
+npx tsx scripts/smoke-returns.ts     # refund + exchange lifecycles
+npx tsx scripts/smoke-shipping.ts    # webhook status sync, RTO restock
+npx tsx scripts/smoke-coupons.ts     # coupon redemption + caps
+node scripts/smoke-store.mjs         # HTTP: storefront, headers, JSON-LD
+node scripts/smoke-auth.mjs          # HTTP: auth + addresses
+node scripts/smoke-admin.mjs         # HTTP: admin guard + pages
 ```
 
 Current unit coverage focuses on the highest-risk pure logic: the GST engine and money
@@ -320,7 +356,7 @@ deploy-time / CI use.
 | 5 | Shipping — Shiprocket webhook, tracking, status sync | ✅ (adapter gated) |
 | 6 | Returns/exchanges, refunds, admin orders | ✅ (gateway refund pending) |
 | 7 | Admin dashboard — product CRUD, inventory, coupons, analytics | ✅ |
-| 8 | Hardening — e2e, rate limiting, CSP, SEO, a11y, error tracking | ⬜ |
+| 8 | Hardening — e2e, rate limiting, CSP, SEO, a11y, error tracking | ✅ |
 | 9 | `docs/DEPLOY.md` — **no deploy without approval** | ⬜ |
 
 ---

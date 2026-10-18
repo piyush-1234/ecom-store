@@ -20,7 +20,7 @@ Phase-by-phase log. Commit-style entries. Updated at the end of every phase.
 | 5 | Shipping — Shiprocket webhook, tracking, status sync | ✅ **Complete** (adapter gated) | **178/178 unit** ✔ · **21/21 shipping lifecycle** ✔ · **44/44 HTTP** ✔ · tracking UI verified visually ✔ |
 | 6 | Returns/exchanges, refunds, admin order management | ✅ **Complete** | **206/206 unit** ✔ · **21/21 returns lifecycle** ✔ · **9/9 admin smoke** ✔ · 44/44 storefront ✔ |
 | 7 | Admin dashboard — product CRUD, inventory, coupons, analytics | ✅ **Complete** | **222/222 unit** ✔ · **14/14 admin** ✔ · **12/12 coupons** ✔ · 44/44 store · 34/34 checkout · 21/21 returns · 21/21 shipping |
-| 8 | Hardening — tests, rate limiting, headers, SEO, a11y, error tracking | ⬜ Not started | — |
+| 8 | Hardening — e2e, rate limiting, headers, load test, SEO, a11y, error tracking | ✅ **Complete** | **13/13 Playwright** ✔ · **222/222 unit** ✔ · **54/54 storefront** ✔ · load test p95 498ms / 0% errors ✔ |
 | 9 | Deploy runbook (`docs/DEPLOY.md`) — **no execution without approval** | ⬜ Not started | — |
 
 ---
@@ -452,5 +452,60 @@ Logged as `BLK-012`.
 - Admin pages are verified **over HTTP** (200 + rendered), not visually: the admin cookie is
   `httpOnly`, and headless Chrome cannot be handed a cookie by this toolchain. Deliberate:
   I will not add a dev backdoor route just to take a screenshot.
+
+---
+
+### `feat(phase-8): hardening — real browser E2E, CSP, a11y, load test, error reporting`
+
+**Done**
+- **Playwright end-to-end** (chromium, Pixel 5 viewport, serial for deterministic state):
+  - the full customer journey — home → filter by size → PDP → add to cart → cart → checkout
+    (COD) → order confirmation → **GST invoice PDF downloads**, and the same URL **404s
+    without the token**
+  - admin — guard redirect → bad password refused → login → every admin surface → sign out
+    → guard rejects again → cookie actually removed
+  - accessibility — one `h1` per page, no image without `alt`, no unnamed button, exactly one
+    `main#main`, skip link wired to it, table headers present, and **Tab focuses the skip link
+    first**
+- **Security headers**: enforced CSP (`default-src 'self'`, `frame-ancestors 'none'`,
+  `object-src 'none'`, `base-uri 'self'`), COOP, HSTS, nosniff, Referrer-Policy
+- **Site-level structured data**: `Organization` + `WebSite` with a `SearchAction`
+- **Error reporting** (`src/server/observability.ts`): structured JSON on stderr plus an
+  optional `ERROR_WEBHOOK_URL` sink, gated behind env and guaranteed not to throw; wired into
+  the API error handler
+- **Load test** (`scripts/load-test.mjs`): dependency-free concurrency harness with p50/p95/p99
+  and an error-rate budget
+- npm scripts: `test:e2e`, `load:test`
+
+**Verified — executed**
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` | ✅ exit 0 |
+| `npx vitest run` | ✅ **222/222** |
+| `npx playwright test` | ✅ **13/13** (7 a11y, 2 admin, 4 customer) |
+| `node scripts/smoke-store.mjs` | ✅ **54/54** (added CSP + JSON-LD assertions) |
+| `node scripts/smoke-auth.mjs` / `smoke-admin.mjs` | ✅ 29/29 · 14/14 |
+| `npx tsx smoke-checkout / returns / shipping / coupons` | ✅ 34/34 · 21/21 · 21/21 · 12/12 |
+| `node scripts/load-test.mjs … 10 20` | ✅ 698 requests, **p95 498 ms**, p99 584 ms, **0% errors** |
+| `npx next build` | ✅ exit 0 |
+
+**Real bugs found by the browser tests (not by the HTTP tests)**
+1. **The cart's checkout button was still the Phase 3 placeholder** — disabled, reading
+   "Checkout coming next" — so checkout was built but **unreachable**. A full funnel existed
+   behind a dead button, and every HTTP and service-level test still passed. Now links to
+   `/checkout` (disabled only when the cart has a stock problem).
+2. **The admin header overflowed on a phone viewport** and **intercepted clicks on "Sign out"**.
+   Playwright reported `<a href="/admin/inventory">… intercepts pointer events`. Fixed by
+   allowing the header to wrap and hiding the admin email on small screens.
+3. A test-selector bug of my own: Next injects `role="alert"` for its route announcer, so
+   `getByRole('alert')` matched two elements. Scoped to the message text.
+
+**Not done**
+- **Stricter CSP with nonces** — scripts still need `'unsafe-inline'` because Next inlines its
+  bootstrap without a nonce. Proper nonce CSP requires middleware and a report-only rollout
+  (`BLK-013`).
+- **Redis-backed rate limiting** — still per-process (`BLK-010`).
+- Automated colour-contrast / full axe audit: needs `@axe-core/playwright`; the structural
+  a11y checks above cover the blocking categories only.
 
 ---

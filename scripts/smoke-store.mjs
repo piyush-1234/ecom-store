@@ -26,7 +26,7 @@ function ok(label, condition, extra = '') {
 async function get(path) {
   const res = await fetch(`${BASE}${path}`, { redirect: 'manual' });
   const text = await res.text();
-  return { status: res.status, text };
+  return { status: res.status, text, headers: res.headers };
 }
 
 async function main() {
@@ -171,6 +171,21 @@ async function main() {
     shipUnknownAwb.status === 200 && shipUnknownBody?.handled === false,
     `status=${shipUnknownAwb.status} handled=${shipUnknownBody?.handled}`,
   );
+
+  // --- security headers (Phase 8) ---
+  const csp = home.headers.get('content-security-policy') ?? '';
+  ok('CSP is sent', csp.includes("default-src 'self'"), csp.slice(0, 80));
+  ok("CSP forbids framing", csp.includes("frame-ancestors 'none'"));
+  ok("CSP forbids object embedding", csp.includes("object-src 'none'"));
+  ok('X-Content-Type-Options is nosniff', home.headers.get('x-content-type-options') === 'nosniff');
+  ok('X-Frame-Options is DENY', home.headers.get('x-frame-options') === 'DENY');
+  ok('Referrer-Policy is set', Boolean(home.headers.get('referrer-policy')));
+  ok('HSTS is set', (home.headers.get('strict-transport-security') ?? '').includes('max-age='));
+
+  // --- site-level structured data ---
+  ok('home emits Organization JSON-LD', home.text.includes('"@type":"Organization"'));
+  ok('home emits WebSite JSON-LD', home.text.includes('"@type":"WebSite"'));
+  ok('home exposes a SearchAction', home.text.includes('SearchAction'));
 
   // --- 404 behaviour ---
   const badCategory = await get('/shoes');

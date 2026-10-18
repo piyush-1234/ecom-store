@@ -140,27 +140,42 @@ code. Restart the machine (or use a fresh port) before manual testing.
 
 ---
 
-## BLK-011 · MEDIUM · OPEN — No browser automation, so UI interactions are verified below the click layer
+## BLK-011 · ✅ RESOLVED — browser E2E now covers the click path
 
-**Context.** Phase 3 adds an add-to-cart flow implemented as a React Server Action bound to
-a form. The built-in browser cannot expose CDP in this environment (`chrome did not expose
-CDP within 30s`), and headless Chrome is only usable for screenshots — there is no driver
-to click a button and observe the result.
+**Resolution.** Playwright is installed with its chromium build kept inside the workspace
+(`PLAYWRIGHT_BROWSERS_PATH`), and **13 tests drive a real browser**.
 
-**Impact.** The following are verified:
-- pages render with real data (32-assertion HTTP smoke)
-- cart DB operations (14-assertion integration test against Postgres)
-- types, build, and that the action is correctly bound in the rendered HTML
+The critical journey is now proven by clicking, not by calling services: home → filter by
+size → product → choose an in-stock size → add to cart → cart → checkout (COD) → order
+confirmation → **invoice PDF downloads** → **the same URL 404s without the token**.
 
-The following is **not** verified: actually clicking "Add to cart" in a browser and landing
-on `/cart` with the item present. That gap is real but narrow — the action delegates to the
-integration-tested cart core.
+It found two defects that every other suite had missed:
+1. The cart's checkout button was still the disabled Phase 3 placeholder — **checkout was
+   built but unreachable**.
+2. The admin header overflowed on a phone viewport and **swallowed clicks on "Sign out"**.
 
-**What I did instead.** Split the cart into `cart-core.service` (pure, DB-testable) and a
-thin cookie-aware wrapper so the business logic is exercised directly rather than assumed.
+Run it with:
 
-**Decision needed.** None now. Playwright in Phase 8 provides true browser E2E; if you want
-it sooner, that phase can be pulled forward.
+```bash
+PLAYWRIGHT_BROWSERS_PATH=<workspace>/.cache/ms-playwright \
+E2E_BASE_URL=http://127.0.0.1:3400 npx playwright test
+```
+
+---
+
+## BLK-013 · LOW · OPEN — CSP allows `'unsafe-inline'` for scripts
+
+**Context.** The enforced CSP is `script-src 'self' 'unsafe-inline'`. Next.js inlines its
+bootstrap and RSC flight data without a nonce, so removing `'unsafe-inline'` today breaks the
+application.
+
+**Impact.** It weakens XSS protection: an injected inline script would be permitted. Every
+other directive is strict (`frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`),
+and no user input reaches `dangerouslySetInnerHTML`.
+
+**Decision needed.** None now. The upgrade path is a nonce-based CSP via middleware, rolled out
+in report-only mode first. Worth doing before launch if the threat model includes third-party
+script injection.
 
 ---
 

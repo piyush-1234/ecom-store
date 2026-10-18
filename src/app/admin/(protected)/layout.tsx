@@ -8,6 +8,11 @@ import { logoutAdminAction } from '@/server/actions/admin';
  *
  * Lives in a route group so `/admin/login` can render without it — a guard in
  * `app/admin/layout.tsx` would redirect the login page to itself forever.
+ *
+ * The header wraps deliberately: with six nav items plus the account block it
+ * overflows a phone viewport, and an overflowing flex row overlaps neighbouring
+ * items so they stop receiving clicks. That was a real bug found by the Playwright
+ * suite, not a theoretical one.
  */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const admin = await getCurrentAdmin();
@@ -16,12 +21,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="flex min-h-dvh flex-col bg-secondary/40">
       <header className="border-b border-border bg-background">
-        <div className="container-page flex h-14 items-center justify-between gap-4">
-          <div className="flex items-center gap-6">
-            <Link href="/admin/orders" className="text-sm font-semibold tracking-tight">
+        <div className="container-page flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
+            <Link href="/admin" className="shrink-0 text-sm font-semibold tracking-tight">
               ecomerce-store · admin
             </Link>
-            <nav aria-label="Admin" className="flex items-center gap-4 text-sm">
+            <nav aria-label="Admin" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
               <Link href="/admin" className="hover:text-accent">
                 Dashboard
               </Link>
@@ -43,12 +48,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             </nav>
           </div>
 
-          <div className="flex items-center gap-4 text-sm">
-            <span className="text-muted-foreground">
+          <div className="flex items-center gap-3 text-sm">
+            {/* Hidden on small screens so the action stays reachable. */}
+            <span className="hidden text-muted-foreground sm:inline">
               {admin.email} · {admin.role}
             </span>
             <form action={logoutAdminAction}>
-              <button type="submit" className="text-muted-foreground hover:text-accent">
+              <button type="submit" className="whitespace-nowrap text-muted-foreground hover:text-accent">
                 Sign out
               </button>
             </form>

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
+import { reportError } from '@/server/observability';
 
 /**
  * Typed application errors.
@@ -72,7 +73,7 @@ export function errorResponse(error: unknown): NextResponse<ErrorBody> {
 
   if (isAppError(error)) {
     if (error.status >= 500) {
-      console.error('[api] application error', { code: error.code, message: error.message });
+      reportError(error, { code: error.code });
     }
     return NextResponse.json(
       { error: { code: error.code, message: error.message, details: error.details } },
@@ -80,7 +81,8 @@ export function errorResponse(error: unknown): NextResponse<ErrorBody> {
     );
   }
 
-  console.error('[api] unhandled error', error);
+  // Unexpected: report with full detail, return something safe.
+  reportError(error, { code: 'INTERNAL' });
   return NextResponse.json(
     { error: { code: 'INTERNAL', message: 'Something went wrong. Please try again.' } },
     { status: 500 },

@@ -145,14 +145,22 @@ export default async function CartPage() {
               All prices include GST. A tax invoice is issued for every order.
             </p>
 
-            <button
-              type="button"
-              disabled
-              title="Checkout is enabled in the next release"
-              className="mt-5 h-12 w-full cursor-not-allowed rounded-md bg-secondary text-sm font-medium text-muted-foreground"
-            >
-              Checkout coming next
-            </button>
+            {cart.hasStockIssue ? (
+              <button
+                type="button"
+                disabled
+                className="mt-5 h-12 w-full cursor-not-allowed rounded-md bg-secondary text-sm font-medium text-muted-foreground"
+              >
+                Update your cart to continue
+              </button>
+            ) : (
+              <Link
+                href="/checkout"
+                className="mt-5 block h-12 w-full rounded-md bg-primary text-center text-sm font-medium leading-[3rem] text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                Proceed to checkout
+              </Link>
+            )}
 
             <Link
               href="/t-shirts"
